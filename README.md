@@ -40,6 +40,8 @@ Each project has its own `pyproject.toml` file that contains the dependencies fo
 
 So for example, the `dash` dependency is only in the dashboard project's `pyproject.toml` file.
 
+Each project has their own distinct configuration files, like `.gitignore`, to keep things separate.
+
 ## To add a new project
 
 ### Create a new poetry project
