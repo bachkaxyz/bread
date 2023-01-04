@@ -59,5 +59,5 @@ poetry new ./packages/<project-name>
 Then in the the root `pyproject.toml` file, add the new project to the `packages` section like so:
 
 ```toml
-<project-name> = { path = "./packages/<project-name>", develop = true }
+project-name = { path = "./packages/<project-name>", develop = true }
 ```
