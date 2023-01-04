@@ -10,6 +10,8 @@ services:
       timeout: 30s
       retries: 50
     restart: always
+    volumes:
+        - redis_data:/data
   postgres-mono:
     image: postgres:15
     ports: 
@@ -24,3 +26,8 @@ services:
       timeout: 30s
       retries: 50
     restart: always
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+volumes:
+  redis_data:
+  postgres-db-volume:
