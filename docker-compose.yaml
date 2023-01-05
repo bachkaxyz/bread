@@ -3,7 +3,7 @@ services:
   redis-mono:
     image: redis:latest
     ports:
-      - 6379:6379
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -12,10 +12,10 @@ services:
     restart: always
     volumes:
         - redis_data:/data
-  postgres-mono:
+  postgres:
     image: postgres:15
     ports: 
-      - 5432:5432
+      - "5432:5432"
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
@@ -28,6 +28,11 @@ services:
     restart: always
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 3000:8080
 volumes:
   redis_data:
   postgres-db-volume:
