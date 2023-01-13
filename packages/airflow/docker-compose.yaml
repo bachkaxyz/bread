@@ -53,7 +53,7 @@ x-airflow-common:
     # For backward compatibility, with Airflow <2.3
     AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
     AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres/airflow
-    AIRFLOW__CELERY__BROKER_URL: redis://:@airflow-redis:6378/0
+    AIRFLOW__CELERY__BROKER_URL: redis://:@127.0.0.1:6379/0
     AIRFLOW__CORE__FERNET_KEY: ''
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
@@ -79,7 +79,7 @@ services:
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
     volumes:
-      - postgres-db-volume:/var/lib/postgresql/data
+      - airflow-postgres-db-volume:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 5s
@@ -89,7 +89,7 @@ services:
   airflow-redis:
     image: redis:latest
     expose:
-      - 6378
+      - 6378:6379
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -112,6 +112,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    env_file:
+      - ./../../.env
 
   airflow-scheduler:
     <<: *airflow-common
@@ -275,8 +277,8 @@ services:
         condition: service_completed_successfully
 
 volumes:
-  postgres-db-volume:
+  airflow-postgres-db-volume:
 networks:
   default:
-    name: airflow
-    driver: bridge
+    name: sn-mono-network
+    external: true
