@@ -6,10 +6,12 @@ authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.9"
+pycoingecko = "^3.1.0"
+
+[tool.poetry.group.dev.dependencies]
 apache-airflow = "^2.5.0"
 apache-airflow-providers-postgres = "^5.4.0"
-
 
 [build-system]
 requires = ["poetry-core"]
