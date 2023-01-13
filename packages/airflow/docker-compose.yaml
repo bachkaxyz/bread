@@ -3,7 +3,10 @@ version: '3.4'
 
 x-common:
   &common
-  image: apache/airflow:2.5.0
+
+  build:
+    context: .
+    dockerfile: Dockerfile
   user: "${AIRFLOW_UID}:0"
   env_file: 
     - .env
