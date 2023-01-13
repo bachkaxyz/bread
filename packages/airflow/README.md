@@ -10,7 +10,12 @@ We are using docker for local development.
 docker-compose up
 ```
 
-### To remove everything:
+### Add Postgres and Redis services as Airflow connections
+
+```bash
+```
+
+### To remove everything
 
 ```bash
 docker-compose down --volumes --remove-orphans

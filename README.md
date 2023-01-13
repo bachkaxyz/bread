@@ -32,6 +32,29 @@ poetry install
 
 This will install all the dependencies for all the projects
 
+## Running
+
+### Create docker network
+
+```bash
+docker network create sn-mono-network
+```
+
+This network is used to connect  all of the projects together (and all of the services in each project)
+
+### Start Core Services
+
+```bash
+docker compose up -d
+```
+
+### Start Separate Project
+
+```bash
+cd <project-name>
+docker compose up -d
+```
+
 ## How is this organized?
 
 There is a root `pyproject.toml` file that contains the dev dependencies for the entire project.
