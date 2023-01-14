@@ -34,21 +34,27 @@ This will install all the dependencies for all the projects
 
 ## Running
 
-### Create docker network
-
-```bash
-docker network create sn-mono-network
-```
-
-This network is used to connect  all of the projects together (and all of the services in each project)
-
 ### Start Core Services
 
 ```bash
 docker compose up -d
 ```
 
-### Start Separate Project
+**Output:**
+
+```bash
+❯ docker compose up -d
+[+] Running 3/3
+ ⠿ Network sn-mono-network              Created                                                           0.0s
+ ⠿ Volume "sn-mono_postgres-db-volume"  Created                                                           0.0s
+ ⠿ Container sn-mono-postgres-1         Started
+```
+
+This network (`sn-mono-network`) is used to connect  all of the projects together (and all of the services in each project)
+
+Each sub-project connects to this network so that they can communicate with each other.
+
+### Start Sub Project
 
 ```bash
 cd <project-name>
@@ -82,5 +88,7 @@ poetry new ./packages/<project-name>
 Then in the the root `pyproject.toml` file, add the new project to the `packages` section like so:
 
 ```toml
-project-name = { path = "./packages/<project-name>", develop = true }
+project-name = { path = "./packages/<project-name>", develop = true, extras = ["dev"] }}`
 ```
+
+extras = ["dev"] is optional, but it will install the dev dependencies for that project, so for airflow we do this because we need the dev dependencies for the `airflow` package for IDE support.
