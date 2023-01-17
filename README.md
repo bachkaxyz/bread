@@ -47,12 +47,17 @@ docker compose up -d
 [+] Running 3/3
  ⠿ Network sn-mono-network              Created                                                           0.0s
  ⠿ Volume "sn-mono_postgres-db-volume"  Created                                                           0.0s
- ⠿ Container sn-mono-postgres-1         Started
+ ⠿ Container sn-mono-workhorse          Started
 ```
 
 This network (`sn-mono-network`) is used to connect  all of the projects together (and all of the services in each project)
 
 Each sub-project connects to this network so that they can communicate with each other.
+
+note: core service postgres runs on port 5431, so db url is either:
+
+- postgresql://postgres:postgres@127.0.0.1:5431/postgres
+- postgresql://postgres:postgres@sn-mono-workhorse:5431/postgres (if in another docker container)
 
 ### Start Sub Project
 
