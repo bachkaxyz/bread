@@ -12,8 +12,16 @@ docker-compose up
 
 ### Add Postgres and Redis services as Airflow connections
 
-```bash
-```
+- Go to [connections list](http://localhost:8080/connection/list/)
+- Add new connection with `workhorse` id with the following:
+  - Conn Type: `Postgres`
+  - Host: `workhorse`
+  - Schema: `postgres`
+  - Login: `postgres`
+  - Password: `postgres`
+  - Port: `5431`
+
+note: we can prob automate this in the future
 
 ### To remove everything
 
