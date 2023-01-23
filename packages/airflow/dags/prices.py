@@ -6,7 +6,6 @@ import pandas as pd
 from pycoingecko import CoinGeckoAPI
 from airflow.decorators import dag, task
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.providers.postgres.operators.postgres import PostgresOperator
 
 
 @dag(
@@ -20,75 +19,80 @@ def ProcessPrices():
     token_mapper = {
         "alpha-finance": "ALPHA",
         "matic-network": "MATIC",
-        # "0x": "ZRX",
-        # "yflink": "YFL",
-        # "enjincoin": "ENJ",
-        # "decentraland": "MANA",
-        # "basic-attention-token": "BAT",
-        # "tornado-cash": "TORN",
-        # "thorchain": "RUNE",
-        # "aave": "AAVE",
-        # "band-protocol": "BAND",
-        # "havven": "SNX",
-        # "kyber-network": "KNC",
-        # "dai": "DAI",
-        # "wrapped-bitcoin": "WBTC",
-        # "maker": "MKR",
-        # "ocean-protocol": "OCEAN",
-        # "chainlink": "LINK",
-        # "tether": "USDT",
-        # "uniswap": "UNI",
-        # "true-usd": "TUSD",
-        # "compound-governance-token": "COMP",
-        # "ethereum": "ETH",
-        # "yearn-finance": "YFI",
-        # "basis-cash": "BAC",
-        # "usd-coin": "USDC",
-        # "reserve-rights-token": "RSR",
-        # "sushi": "SUSHI",
-        # "defipulse-index": "DPI",
-        # "republic-protocol": "REN",
-        # "renbtc": "renBTC",
-        # "secret-erc20": "wSCRT",
-        # "secret-finance": "SEFI",
-        # "binancecoin": "BNB",
-        # "binance-eth": "ETH",
-        # "binance-peg-polkadot": "DOT",
-        # "tether": "USDT",
-        # "binance-peg-cardano": "ADA",
-        # "binance-peg-xrp": "XRP",
-        # "binance-peg-dogecoin": "DOGE",
-        # "usd-coin": "USDC",
-        # "binance-peg-bitcoin-cash": "BCH",
-        # "binance-peg-litecoin": "LTC",
-        # "binance-usd": "BUSD",
-        # "tron-bsc": "TRX",
-        # "pancakeswap-token": "CAKE",
-        # "bakerytoken": "BAKE",
-        # "venus": "XVS",
-        # "lina": "LINA",
-        # "refinable": "FINE",
-        # "bunnycoin": "BUNNY",
-        # "sienna-erc20": "wSIENNA",
-        # "monero": "XMR",
-        # "cosmos": "ATOM",
-        # "osmosis": "OSMO",
-        # "terra-luna": "LUNA",
-        # "sentinel": "DVPN",
-        # "secret": "SCRT",
-        # "terrausd": "UST",
-        # "akash-network": "AKT",
-        # "terra-krw": "KRW",
-        # "juno-network": "JUNO",
-        # "chihuahua-token": "HUAHUA",
+        "0x": "ZRX",
+        "yflink": "YFL",
+        "enjincoin": "ENJ",
+        "decentraland": "MANA",
+        "basic-attention-token": "BAT",
+        "tornado-cash": "TORN",
+        "thorchain": "RUNE",
+        "aave": "AAVE",
+        "band-protocol": "BAND",
+        "havven": "SNX",
+        "kyber-network": "KNC",
+        "dai": "DAI",
+        "wrapped-bitcoin": "WBTC",
+        "maker": "MKR",
+        "ocean-protocol": "OCEAN",
+        "chainlink": "LINK",
+        "tether": "USDT",
+        "uniswap": "UNI",
+        "true-usd": "TUSD",
+        "compound-governance-token": "COMP",
+        "ethereum": "ETH",
+        "yearn-finance": "YFI",
+        "basis-cash": "BAC",
+        "usd-coin": "USDC",
+        "reserve-rights-token": "RSR",
+        "sushi": "SUSHI",
+        "defipulse-index": "DPI",
+        "republic-protocol": "REN",
+        "renbtc": "renBTC",
+        "secret-erc20": "wSCRT",
+        "secret-finance": "SEFI",
+        "binancecoin": "BNB",
+        "binance-eth": "ETH",
+        "binance-peg-polkadot": "DOT",
+        "tether": "USDT",
+        "binance-peg-cardano": "ADA",
+        "binance-peg-xrp": "XRP",
+        "binance-peg-dogecoin": "DOGE",
+        "usd-coin": "USDC",
+        "binance-peg-bitcoin-cash": "BCH",
+        "binance-peg-litecoin": "LTC",
+        "binance-usd": "BUSD",
+        "tron-bsc": "TRX",
+        "pancakeswap-token": "CAKE",
+        "bakerytoken": "BAKE",
+        "venus": "XVS",
+        "lina": "LINA",
+        "refinable": "FINE",
+        "bunnycoin": "BUNNY",
+        "sienna-erc20": "wSIENNA",
+        "monero": "XMR",
+        "cosmos": "ATOM",
+        "osmosis": "OSMO",
+        "terra-luna": "LUNA",
+        "sentinel": "DVPN",
+        "secret": "SCRT",
+        "terrausd": "UST",
+        "akash-network": "AKT",
+        "terra-krw": "KRW",
+        "juno-network": "JUNO",
+        "chihuahua-token": "HUAHUA",
     }
 
     ninety_day_seconds = datetime.timedelta(days=90).total_seconds()
 
     @task()
     def get_min_time():
-        # return 1607957730
-        return 1663958551
+        postgres = PostgresHook(postgres_conn_id="workhorse")
+        max_time = postgres.get_first("select max(time) from prices")[0]
+        if max_time is None:
+            return 1607957730
+        return (
+            int(max_time.strftime("%s")) + 3600
+        )  # converts to unix timestamp and add 1 hour to prevent primary key violation
 
     @task()
     def get_price_data(ticker: str, min_time: int, cur_time: int):
@@ -98,18 +102,28 @@ def ProcessPrices():
         next_time = min_time
         # for hourly data we need to get 90 days at a time
         while next_time < cur_time:
+            tries = 0
+            data = None
             print(
                 "processing time: ",
                 datetime.datetime.fromtimestamp(next_time),
                 " to ",
                 datetime.datetime.fromtimestamp(next_time + ninety_day_seconds),
+                "try #",
+                tries,
             )
-            data = cg.get_coin_market_chart_range_by_id(
-                ticker,
-                vs_currency="usd",
-                from_timestamp=min_time,
-                to_timestamp=next_time + ninety_day_seconds,
-            )
+            while data is None:
+                try:
+                    data = cg.get_coin_market_chart_range_by_id(
+                        ticker,
+                        vs_currency="usd",
+                        from_timestamp=min_time,
+                        to_timestamp=next_time + ninety_day_seconds,
+                    )
+                except Exception as e:
+                    print("error: ", e)
+                    time.sleep(20)
+
             next_time += ninety_day_seconds
             ticker_prices.extend(data["prices"])
         return ticker, ticker_prices
@@ -142,9 +156,13 @@ def ProcessPrices():
     def insert_data(data):
         df = pd.read_json(data)
         inserts = list(df.itertuples())
-        print(inserts[0])
         postgres = PostgresHook(postgres_conn_id="workhorse")
-        postgres.insert_rows(table="prices", rows=inserts, commit_every=1000)
+        postgres.insert_rows(
+            table="prices",
+            rows=inserts,
+            commit_every=1000,
+        )
+        print("appended new rows")
 
     insert_data(prices_df_json)
 
