@@ -7,10 +7,8 @@ services:
       - 5431:5431
     expose: 
       - 5431
-    environment:
-      POSTGRES_DB: postgres
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+    env_file: 
+      - .env
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 5s
