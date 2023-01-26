@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "api"
+version = "0.1.0"
+description = ""
+authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.89.1"
+uvicorn = {version = "^0.20.0", extras = ["standard"]}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

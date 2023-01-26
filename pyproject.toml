@@ -9,6 +9,7 @@ readme = "README.md"
 python = "^3.9"
 dashboard = { path = "./packages/dashboard", develop = true, extras = ["dev"] }
 airflow = { path = "./packages/airflow", develop = true, extras = ["dev"] }
+api = { path = "./packages/api", develop = true, extras = ["dev"] }
 black = "^22.12.0"
 
 [build-system]

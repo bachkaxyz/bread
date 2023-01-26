@@ -10,86 +10,39 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 @dag(
     dag_id="process-prices",
-    schedule="0 * * * *",
+    schedule="0 0 * * *",
     start_date=pendulum.datetime(2021, 1, 1, tz="UTC"),
     catchup=False,
     dagrun_timeout=datetime.timedelta(minutes=60),
 )
 def ProcessPrices():
     token_mapper = {
-        "alpha-finance": "ALPHA",
-        "matic-network": "MATIC",
-        "0x": "ZRX",
-        "yflink": "YFL",
-        "enjincoin": "ENJ",
-        "decentraland": "MANA",
-        "basic-attention-token": "BAT",
-        "tornado-cash": "TORN",
-        "thorchain": "RUNE",
-        "aave": "AAVE",
-        "band-protocol": "BAND",
-        "havven": "SNX",
-        "kyber-network": "KNC",
-        "dai": "DAI",
-        "wrapped-bitcoin": "WBTC",
-        "maker": "MKR",
-        "ocean-protocol": "OCEAN",
-        "chainlink": "LINK",
         "tether": "USDT",
-        "uniswap": "UNI",
         "true-usd": "TUSD",
-        "compound-governance-token": "COMP",
         "ethereum": "ETH",
-        "yearn-finance": "YFI",
-        "basis-cash": "BAC",
         "usd-coin": "USDC",
-        "reserve-rights-token": "RSR",
-        "sushi": "SUSHI",
-        "defipulse-index": "DPI",
-        "republic-protocol": "REN",
-        "renbtc": "renBTC",
         "secret-erc20": "wSCRT",
         "secret-finance": "SEFI",
-        "binancecoin": "BNB",
-        "binance-eth": "ETH",
-        "binance-peg-polkadot": "DOT",
-        "tether": "USDT",
-        "binance-peg-cardano": "ADA",
-        "binance-peg-xrp": "XRP",
-        "binance-peg-dogecoin": "DOGE",
-        "usd-coin": "USDC",
-        "binance-peg-bitcoin-cash": "BCH",
-        "binance-peg-litecoin": "LTC",
         "binance-usd": "BUSD",
-        "tron-bsc": "TRX",
-        "pancakeswap-token": "CAKE",
-        "bakerytoken": "BAKE",
-        "venus": "XVS",
-        "lina": "LINA",
-        "refinable": "FINE",
-        "bunnycoin": "BUNNY",
-        "sienna-erc20": "wSIENNA",
-        "monero": "XMR",
+        "sienna": "SIENNA",
         "cosmos": "ATOM",
         "osmosis": "OSMO",
-        "terra-luna": "LUNA",
-        "sentinel": "DVPN",
         "secret": "SCRT",
         "terrausd": "UST",
-        "akash-network": "AKT",
-        "terra-krw": "KRW",
         "juno-network": "JUNO",
-        "chihuahua-token": "HUAHUA",
     }
 
     ninety_day_seconds = datetime.timedelta(days=90).total_seconds()
 
     @task()
     def get_min_time():
-        postgres = PostgresHook(postgres_conn_id="workhorse")
-        max_time = postgres.get_first("select max(time) from prices")[0]
+        try:
+            postgres = PostgresHook(postgres_conn_id="workhorse")
+            max_time = postgres.get_first("select max(time) from prices")[0]
+        except:
+            max_time = None
         if max_time is None:
-            return 1607957730
+            return 1664042513
         return (
             int(max_time.strftime("%s")) + 3600
         )  # converts to unix timestamp and add 1 hour to prevent primary key violation
@@ -139,8 +92,16 @@ def ProcessPrices():
             per_ticker_df = per_ticker_df.resample("H").last().ffill()
             ticker_prices.append(per_ticker_df)
 
-        prices_df = pd.concat(ticker_prices, axis=1)
-        print(prices_df.to_json())
+        prices_df = (
+            pd.concat(ticker_prices, axis=1)
+            .sort_index()
+            .ffill()
+            .drop_duplicates()
+            .resample("1H")
+            .last()
+            .ffill()
+        )
+        print(prices_df.head(), prices_df.tail())
         return prices_df.to_json()
 
     min_time = get_min_time()
@@ -155,12 +116,16 @@ def ProcessPrices():
     @task()
     def insert_data(data):
         df = pd.read_json(data)
-        inserts = list(df.itertuples())
+        print(df)
+        print([list(i) for i in df.itertuples()])
         postgres = PostgresHook(postgres_conn_id="workhorse")
         postgres.insert_rows(
             table="prices",
-            rows=inserts,
+            rows=[list(i) for i in df.itertuples()],
             commit_every=1000,
+            replace=True,
+            replace_index=["time"],
+            target_fields=["time"] + [f'"{col}"' for col in df.columns.tolist()],
         )
         print("appended new rows")
 
