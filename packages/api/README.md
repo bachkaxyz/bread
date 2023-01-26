@@ -1,7 +1,9 @@
 # Secret Analytics API
 
-To run locally:
+To run locally with docker:
 
 ```bash
-uvicorn main:app --reload
+docker compose up -d --build
 ```
+
+note: --build builds our custom image from the dockerfile
