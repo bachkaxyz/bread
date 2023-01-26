@@ -11,7 +11,7 @@ services:
     env_file:
       - .env
       - ./../../.env
-    command: python index.py --port 8000
+    command: python index.py
     volumes:
       - ./dashboard:/dashboard
 networks:
