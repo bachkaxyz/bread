@@ -1,0 +1,21 @@
+version: '3'
+services:
+  dashboard:
+    container_name: dashboard
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8050:8050"
+    env_file:
+      - .env
+      - ./../../.env
+    command: python index.py --port 8000
+    volumes:
+      - ./dashboard:/dashboard
+networks:
+  default:
+    name: sn-mono-network
+    driver: bridge
+    external: true

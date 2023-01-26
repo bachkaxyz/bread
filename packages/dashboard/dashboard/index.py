@@ -4,8 +4,15 @@
 from dash import Dash, html, dcc
 import plotly.express as px
 import pandas as pd
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+DEBUG_MODE = os.getenv("DEBUG").upper() == "TRUE"
 
 app = Dash(__name__)
+
 
 # assume you have a "long-form" data frame
 # see https://plotly.com/python/px-arguments/ for more options
@@ -31,5 +38,7 @@ app.layout = html.Div(
     ]
 )
 
+server = app.server
+
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run_server(host="0.0.0.0", debug=DEBUG_MODE)
