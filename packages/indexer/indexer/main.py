@@ -1,48 +1,11 @@
-import asyncio, aiohttp, json, time, asyncpg, os
+import asyncio, aiohttp, json, asyncpg, os
 from typing import List
 from dotenv import load_dotenv
 from indexer.chain_mapper import CosmosAPI, chain_mapping
+from indexer.data import get_block
+from indexer.db import create_tables, upsert_block
 
-load_dotenv(".env")
-
-
-async def create_tables(pool):
-    async with pool.acquire() as conn:
-
-        await conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS blocks (
-                chain_id TEXT NOT NULL,
-                height BIGINT NOT NULL,
-                block JSONB,
-                
-                PRIMARY KEY (chain_id, height)
-            );
-        """
-        )
-
-
-async def get_block(
-    session: aiohttp.ClientSession, api: CosmosAPI, height: str = "latest"
-):
-    async with session.get(
-        f"{api.url}/cosmos/base/tendermint/v1beta1/blocks/{height}"
-    ) as resp:
-        return await resp.json()
-
-
-async def upsert_block(pool, block: dict):
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO blocks (chain_id, height, block)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (chain_id, height) DO UPDATE SET block = $3
-        """,
-            block["block"]["header"]["chain_id"],
-            int(block["block"]["header"]["height"]),
-            json.dumps(block),
-        )
+load_dotenv()
 
 
 async def get_live_chain_data(
@@ -93,9 +56,6 @@ async def main():
                 *[
                     get_live_chain_data(chain_id, apis, pool, session)
                     for chain_id, apis in chain_mapping.items()
-                ]
-                + [
-                    # we can add other tasks (function calls) here to also run in parallel
                 ]
             )
 
