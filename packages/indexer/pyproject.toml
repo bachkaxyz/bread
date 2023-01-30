@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "indexer"
+version = "0.1.0"
+description = ""
+authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+asyncio = "^3.4.3"
+python-dotenv = "^0.21.1"
+aiohttp = "^3.8.3"
+aiodns = "^3.0.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
