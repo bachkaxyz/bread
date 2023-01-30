@@ -1,6 +1,8 @@
+from dataclasses import dataclass, field
 from typing import Dict, List
 
 
+@dataclass
 class CosmosAPI:
     url: str
     archive: bool = False
