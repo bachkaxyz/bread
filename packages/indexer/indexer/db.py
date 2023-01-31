@@ -1,7 +1,12 @@
 import json
+import aiohttp
+
+import asyncpg
+from indexer.chain_mapper import CosmosChain
+from indexer.data import get_block
 
 
-async def drop_tables(pool):
+async def drop_tables(pool: asyncpg.pool):
     await pool.execute(
         """
         DROP TABLE IF EXISTS raw CASCADE;
@@ -11,7 +16,7 @@ async def drop_tables(pool):
     )
 
 
-async def create_tables(pool):
+async def create_tables(pool: asyncpg.pool):
     async with pool.acquire() as conn:
 
         await conn.execute(
@@ -112,7 +117,7 @@ async def create_tables(pool):
         )
 
 
-async def upsert_block(pool, block: dict, txs: dict):
+async def upsert_block(pool: asyncpg.pool, block: dict, txs: dict):
     async with pool.acquire() as conn:
         chain_id, height = block["block"]["header"]["chain_id"], int(
             block["block"]["header"]["height"]
@@ -121,6 +126,7 @@ async def upsert_block(pool, block: dict, txs: dict):
             """
             INSERT INTO raw (chain_id, height, block, txs)
             VALUES ($1, $2, $3, $4)
+            ON CONFLICT DO NOTHING
             """,
             chain_id,
             height,
@@ -133,3 +139,23 @@ async def upsert_block(pool, block: dict, txs: dict):
             NOTIFY raw, '{chain_id} {height}';
             """
         )
+
+
+async def get_missing_blocks(
+    pool: asyncpg.pool, session: aiohttp.ClientSession, chain: CosmosChain
+):
+
+    while True:
+        block_data = await get_block(session, chain.apis[0])
+        current_block = int(block_data["block"]["header"]["height"])
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT height FROM blocks WHERE chain_id = $1
+                """,
+                chain.chain_id,
+            )
+            heights = [row[0] for row in rows]
+            for height in range(chain.min_block_height, current_block):
+                if height not in heights:
+                    yield height
