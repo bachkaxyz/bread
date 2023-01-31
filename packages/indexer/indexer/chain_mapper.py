@@ -17,4 +17,7 @@ chain_mapping: Dict[str, List[CosmosAPI]] = {
         CosmosAPI(url="https://jackal-api.polkachu.com"),
         CosmosAPI(url=" https://api.jackal.nodestake.top"),
     ],
+    'akashnet-2': [
+        CosmosAPI(url="https://akash-api.polkachu.com")
+    ]
 }
