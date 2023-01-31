@@ -1,7 +1,7 @@
 import asyncio, aiohttp, json, asyncpg, os
 from typing import List
 from dotenv import load_dotenv
-from indexer.chain_mapper import CosmosAPI, chain_mapping
+from indexer.chain_mapper import CosmosChain, chain_mapping
 from indexer.data import get_block, get_txs
 from indexer.db import create_tables, drop_tables, upsert_block
 import traceback
@@ -10,8 +10,7 @@ load_dotenv()
 
 
 async def get_live_chain_data(
-    chain_id: str,
-    apis: List[CosmosAPI],
+    chain: CosmosChain,
     pool,
     session: aiohttp.ClientSession,
 ):
@@ -19,21 +18,21 @@ async def get_live_chain_data(
     last_block = 0
     while True:
         try:
-            block_data = await get_block(session, apis[current_api_index])
+            block_data = await get_block(session, chain.apis[current_api_index])
             current_block = int(block_data["block"]["header"]["height"])
             if last_block >= current_block:
                 # print(f"{chain_id} - block {current_block} already indexed")
                 await asyncio.sleep(1)
             else:
-                print(f"{chain_id} - block {current_block} indexed")
+                print(f"{chain.chain_id} - block {current_block} indexed")
                 last_block = current_block
                 # need to come back to this
                 try:
                     txs_data = await get_txs(
-                        session, apis[current_api_index], current_block
+                        session, chain.apis[current_api_index], current_block
                     )
                 except:
-                    print(f"failed to get txs for {chain_id} - {current_block}")
+                    print(f"failed to get txs for {chain.chain_id} - {current_block}")
                     txs_data = []
                 try:
                     await upsert_block(pool, block_data, txs_data)
@@ -47,9 +46,9 @@ async def get_live_chain_data(
 
         except Exception as e:
             print(
-                f"{chain_id} - Failed to get a block from {apis[current_api_index].url} - {repr(e)}"
+                f"{chain.chain_id} - Failed to get a block from {chain.apis[current_api_index].url} - {repr(e)}"
             )
-            current_api_index = (current_api_index + 1) % len(apis)
+            current_api_index = (current_api_index + 1) % len(chain.apis)
 
 
 async def listen_raw_blocks(conn, pid, channel, payload):
@@ -82,8 +81,8 @@ async def main():
             try:
                 await asyncio.gather(
                     *[
-                        get_live_chain_data(chain_id, apis, pool, session)
-                        for chain_id, apis in chain_mapping.items()
+                        get_live_chain_data(chain, pool, session)
+                        for chain in chain_mapping
                     ],
                     # conn.add_listener("raw_blocks", listen_raw_blocks),
                 )
