@@ -3,7 +3,7 @@ from typing import List
 from dotenv import load_dotenv
 from indexer.chain_mapper import CosmosAPI, chain_mapping
 from indexer.data import get_block, get_txs
-from indexer.db import create_tables, upsert_block
+from indexer.db import create_tables, drop_tables, upsert_block
 import traceback
 
 load_dotenv()
@@ -72,6 +72,8 @@ async def main():
         database=os.getenv("POSTGRES_DB"),
         command_timeout=60,
     ) as pool:
+        # drop tables for testing purposes
+        await drop_tables(pool)
 
         await create_tables(pool)
         conn = await pool.acquire()
