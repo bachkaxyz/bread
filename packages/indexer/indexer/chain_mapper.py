@@ -11,7 +11,6 @@ class CosmosAPI:
 chain_mapping: Dict[str, List[CosmosAPI]] = {
     "secret-4": [
         CosmosAPI(url="https://secret-4.api.trivium.network:1317"),
-        CosmosAPI(url="https://scrt-lcd.blockpane.com", archive=True),
     ],
     "jackal-1": [
         CosmosAPI(url="https://api.jackalprotocol.com"),
