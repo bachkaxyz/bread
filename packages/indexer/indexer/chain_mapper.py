@@ -7,6 +7,7 @@ class CosmosChain:
     chain_id: str
     min_block_height: int
     apis: List["CosmosAPI"] = field(default_factory=list)
+    current_api_index: int = 0
 
 
 @dataclass
@@ -18,7 +19,7 @@ class CosmosAPI:
 chain_mapping: List[CosmosChain] = [
     CosmosChain(
         chain_id="secret-4",
-        min_block_height=6955001,
+        min_block_height=7284419,
         apis=[
             CosmosAPI(url="https://secret-4.api.trivium.network:1317"),
         ],

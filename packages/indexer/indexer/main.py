@@ -9,69 +9,88 @@ import traceback
 load_dotenv()
 
 
+async def process_block(
+    chain: CosmosChain,
+    height: int,
+    pool,
+    session: aiohttp.ClientSession,
+    block_data: dict = None,
+) -> bool:
+    if block_data is None:
+        block_data = await get_block(
+            session, chain.apis[chain.current_api_index], height
+        )
+    if block_data is None:
+        print(f"block_data is None - {chain.chain_id}")
+        return False
+    # need to come back to this
+    txs_data = await get_txs(session, chain.apis[chain.current_api_index], height)
+    if txs_data is None:
+        print(f"txs_data is None - {chain.chain_id}")
+        return False
+    try:
+        await upsert_block(pool, block_data, txs_data)
+        return True
+    except Exception as e:
+        print(f"upsert_block error {repr(e)} - {chain.chain_id} - {height}")
+        traceback.print_exc()
+        return False
+
+
 async def get_live_chain_data(
     chain: CosmosChain,
     pool,
     session: aiohttp.ClientSession,
 ):
-    current_api_index = 0
     last_block = 0
-    # async with aiohttp.ClientSession() as session:
     while True:
         try:
-            block_data = await get_block(session, chain.apis[current_api_index])
-            current_block = int(block_data["block"]["header"]["height"])
-            if last_block >= current_block:
-                # print(f"{chain_id} - block {current_block} already indexed")
-                await asyncio.sleep(1)
-            else:
-                print(f"{chain.chain_id} - block {current_block} indexed")
-                last_block = current_block
-                # need to come back to this
-                try:
-                    txs_data = await get_txs(
-                        session, chain.apis[current_api_index], current_block
-                    )
-                except:
-                    print(f"failed to get txs for {chain.chain_id} - {current_block}")
-                    txs_data = []
-                try:
-                    await upsert_block(pool, block_data, txs_data)
-                except Exception as e:
-                    print(
-                        f"upsert_block error {repr(e)} - {chain.chain_id} - {current_block}"
-                    )
-                    traceback.print_exc()
+            block_data = await get_block(session, chain.apis[chain.current_api_index])
+            if block_data is not None:
+                current_block = int(block_data["block"]["header"]["height"])
+                if last_block >= current_block:
+                    # print(f"{chain_id} - block {current_block} already indexed")
+                    await asyncio.sleep(1)
+                else:
+                    last_block = current_block
+                    if await process_block(
+                        chain=chain,
+                        height=current_block,
+                        pool=pool,
+                        session=session,
+                        block_data=block_data,
+                    ):
+                        print(
+                            f"processed live block {current_block} - {chain.chain_id}"
+                        )
+                    else:
+                        # should we save this to db?
+                        print(
+                            f"failed to process block {current_block} - {chain.chain_id}"
+                        )
 
-                    # print(f"postgres error {repr(e)} - {chain_id} - {current_block}")
+            else:
+                print(f"block_data is None - {chain.chain_id}")
+                # save error to db
 
             # upsert block data to db
             # chain_id, current_height, json.dump(res)
 
         except Exception as e:
             print(
-                f"live - {chain.chain_id} - Failed to get a block from {chain.apis[current_api_index].url} - {repr(e)}"
+                f"live - {chain.chain_id} - Failed to get a block from {chain.apis[chain.current_api_index].url} - {repr(e)}"
             )
-            current_api_index = (current_api_index + 1) % len(chain.apis)
+            chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
 
 
 async def backfill_data(
     chain: CosmosChain, pool: asyncpg.pool, session: aiohttp.ClientSession
 ):
-    current_api_index = 0
     async for height in get_missing_blocks(pool, session, chain):
-        print(f"backfilling {chain.chain_id} {height}")
-        block_data = await get_block(session, chain.apis[current_api_index], height)
-        try:
-            txs_data = await get_txs(session, chain.apis[current_api_index], height)
-        except:
-            print(f"failed to get txs for {chain.chain_id} - {height}")
-            txs_data = []
-        try:
-            await upsert_block(pool, block_data, txs_data)
-        except Exception as e:
-            print(f"upsert_block error {repr(e)} - {chain.chain_id} - {height}")
-            traceback.print_exc()
+        if await process_block(chain=chain, height=height, pool=pool, session=session):
+            print(f"backfilled block {height} - {chain.chain_id}")
+        else:
+            print(f"failed to backfill block {height} - {chain.chain_id}")
 
 
 async def listen_raw_blocks(conn, pid, channel, payload):
