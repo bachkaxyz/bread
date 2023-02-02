@@ -47,7 +47,7 @@ docker compose up -d
 [+] Running 3/3
  ⠿ Network sn-mono-network              Created                                                           0.0s
  ⠿ Volume "sn-mono_postgres-db-volume"  Created                                                           0.0s
- ⠿ Container sn-mono-workhorse          Started
+ ⠿ Container sn-mono-workhorse          Started 
 ```
 
 This network (`sn-mono-network`) is used to connect  all of the projects together (and all of the services in each project)
