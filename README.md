@@ -36,14 +36,13 @@ This is the dashboard that is built with [dash](https://dash.plotly.com/) and de
 We are currently in the process of migrating from multiple old repos to this new one:
 
 Here are a list of tasks that need to be done:
-Work Plan
 
-- [ ] Migrate from Heroku to GCP (2 weeks)
+- [ ] Migrate from Heroku to GCP
   - [ ] Redis (cut until ended)
   - [x] Postgres
   - [x] Dashboard app via Cloud Run [(link)](https://dashboard-server-2sizcg3ipa-uc.a.run.app/)
 
-- [ ] Data modeling (6 weeks)
+- [ ] Data modeling
   - [ ] Airflow via Cloud Compose to execute Python scripts and cronjobs (RQ tasks)
     - [ ] CG Prices
     - [x] Validator
