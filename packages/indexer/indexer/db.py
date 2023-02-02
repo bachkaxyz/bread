@@ -63,6 +63,13 @@ async def create_tables(pool: asyncpg.pool):
                 
                 FOREIGN KEY (chain_id, height) REFERENCES blocks (chain_id, height)
             );
+            CREATE TABLE IF NOT EXISTS messages (
+                key TEXT,
+                value TEXT,
+                txhash TEXT,
+                
+                FOREIGN KEY (txhash) REFERENCES txs (txhash)
+            );
             """
         )
 

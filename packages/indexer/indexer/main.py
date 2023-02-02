@@ -17,16 +17,17 @@ async def process_block(
     block_data: dict = None,
 ) -> bool:
     if block_data is None:
+        # this is because block data might be passed in from the live chain data (so removing a rerequest)
         block_data = await get_block(
             session, chain.apis[chain.current_api_index], height
         )
-    if block_data is None:
-        print(f"block_data is None - {chain.chain_id}")
-        return False
+
     # need to come back to this
     txs_data = await get_txs(session, chain.apis[chain.current_api_index], height)
-    if txs_data is None:
-        print(f"txs_data is None - {chain.chain_id}")
+    if txs_data is None or block_data is None:
+        print(
+            f"{'tx_data' if txs_data is None else 'block_data'} is None - {chain.chain_id}"
+        )
         return False
     try:
         await upsert_block(pool, block_data, txs_data)
