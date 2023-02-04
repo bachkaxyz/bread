@@ -6,7 +6,7 @@ authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "3.10.*"
 dashboard = { path = "./packages/dashboard", develop = true, extras = ["dev"] }
 airflow = { path = "./packages/airflow", develop = true, extras = ["dev"] }
 api = { path = "./packages/api", develop = true, extras = ["dev"] }
