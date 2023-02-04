@@ -6,7 +6,7 @@ authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "3.10"
+python = "3.10.*"
 dash = "^2.7.1"
 pandas = "^1.5.2"
 uvicorn = "^0.20.0"
