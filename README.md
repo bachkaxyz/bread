@@ -76,7 +76,7 @@ Here are a list of tasks that need to be done:
 ### Create new virtual environment
 
 ```bash
-conda create -n "sn-mono" python=3.11    
+conda create -n "sn-mono" python=3.10   
 ```
 
 ### Activate virtual environment
