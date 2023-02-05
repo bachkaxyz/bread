@@ -1,0 +1,19 @@
+version: '3'
+services: 
+  indexer:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: indexer
+    container_name: indexer
+    env_file:
+      - .env
+      - ./../../.env
+    volumes:
+      - .:/indexer
+    command: python indexer/main.py
+networks:
+  default:
+    name: sn-mono-network
+    driver: bridge
+    external: true
