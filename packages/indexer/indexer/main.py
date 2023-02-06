@@ -115,7 +115,7 @@ async def main():
         command_timeout=60,
     ) as pool:
         # drop tables for testing purposes
-        # await drop_tables(pool)
+        await drop_tables(pool)
 
         await create_tables(pool)
 
