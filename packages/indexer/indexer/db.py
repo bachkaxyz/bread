@@ -60,16 +60,23 @@ async def get_missing_blocks(
 ):
 
     while True:
-        block_data = await get_block(session, chain.apis[0])
+        block_data = await get_block(session, chain.apis[chain.current_api_index])
         current_block = int(block_data["block"]["header"]["height"])
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT height FROM blocks WHERE chain_id = $1
+                select height, difference_per_block from (
+                    select height, COALESCE(height - LAG(height) over (order by time), -1) as difference_per_block, chain_id
+                    from blocks
+                    where chain_id = $1
+                ) as dif
+                where difference_per_block <> 1
                 """,
                 chain.chain_id,
             )
-            heights = [row[0] for row in rows]
-            for height in range(chain.min_block_height, current_block):
-                if height not in heights:
-                    yield height
+            for height, dif in rows:
+                if dif == -1:
+                    yield chain.min_block_height
+                else:
+                    for i in range(height - dif, height):
+                        yield i

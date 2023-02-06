@@ -11,7 +11,8 @@ $$
             (NEW.block->'block'->'header'->'time')::TEXT::timestamp without time zone,
             (NEW.block->'block_id'->>'hash')::TEXT,
             (NEW.block->'block'->'header'->>'proposer_address')::TEXT
-        );
+        )
+        ON CONFLICT DO NOTHING;
         
                 
         FOR tx_responses IN SELECT * FROM jsonb_array_elements(NEW.txs->'tx_responses')
@@ -34,7 +35,8 @@ $$
                 (tx_responses->>'gas_wanted')::BIGINT,
                 tx_responses->>'codespace',
                 (tx_responses->'timestamp')::TEXT::TIMESTAMP
-            );
+            )
+            ON CONFLICT DO NOTHING;
         END LOOP;
         
         RETURN NEW;
@@ -42,6 +44,6 @@ $$
 $$ 
 LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER raw_insert
-AFTER INSERT
+BEFORE INSERT
 ON raw
 FOR EACH ROW EXECUTE PROCEDURE parse_raw();
