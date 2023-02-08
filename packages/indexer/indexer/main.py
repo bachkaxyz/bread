@@ -1,10 +1,18 @@
 import asyncio, aiohttp, json, asyncpg, os
+import traceback
 from typing import List
 from dotenv import load_dotenv
-from indexer.chain_mapper import CosmosChain, chain_mapping
-from indexer.data import get_block, get_txs
-from indexer.db import create_tables, drop_tables, get_missing_blocks, upsert_block
-import traceback
+from indexer.chain import CosmosChain
+from indexer.db import (
+    add_columns,
+    create_tables,
+    drop_tables,
+    get_missing_blocks,
+    get_table_cols,
+    upsert_block,
+)
+from flatten_json import flatten
+from indexer.parser import parse_logs, parse_messages
 
 load_dotenv()
 
@@ -18,22 +26,18 @@ async def process_block(
 ) -> bool:
     if block_data is None:
         # this is because block data might be passed in from the live chain data (so removing a rerequest)
-        block_data = await get_block(
-            session, chain.apis[chain.current_api_index], height
-        )
+        block_data = await chain.get_block(session, height)
 
     # need to come back to this
-    txs_data = await get_txs(session, chain.apis[chain.current_api_index], height)
+    txs_data = await chain.get_txs(session, height)
     if txs_data is None or block_data is None:
-        print(
-            f"{'tx_data' if txs_data is None else 'block_data'} is None - {chain.chain_id}"
-        )
+        print(f"{'tx_data' if txs_data is None else 'block_data'} is None")
         return False
     try:
         await upsert_block(pool, block_data, txs_data)
         return True
     except Exception as e:
-        print(f"upsert_block error {repr(e)} - {chain.chain_id} - {height}")
+        print(f"upsert_block error {repr(e)} - {height}")
         traceback.print_exc()
         return False
 
@@ -46,7 +50,9 @@ async def get_live_chain_data(
     last_block = 0
     while True:
         try:
-            block_data = await get_block(session, chain.apis[chain.current_api_index])
+            block_data = await chain.get_block(
+                session,
+            )
             if block_data is not None:
                 current_block = int(block_data["block"]["header"]["height"])
                 if last_block >= current_block:
@@ -61,17 +67,13 @@ async def get_live_chain_data(
                         session=session,
                         block_data=block_data,
                     ):
-                        print(
-                            f"processed live block {current_block} - {chain.chain_id}"
-                        )
+                        print(f"processed live block - {current_block}")
                     else:
                         # should we save this to db?
-                        print(
-                            f"failed to process block {current_block} - {chain.chain_id}"
-                        )
+                        print(f"failed to process block - {current_block}")
 
             else:
-                print(f"block_data is None - {chain.chain_id}")
+                print(f"block_data is None")
                 # save error to db
 
             # upsert block data to db
@@ -79,9 +81,10 @@ async def get_live_chain_data(
 
         except Exception as e:
             print(
-                f"live - {chain.chain_id} - Failed to get a block from {chain.apis[chain.current_api_index].url} - {repr(e)}"
+                f"live - Failed to get a block from {chain.apis[chain.current_api_index]} - {repr(e)}"
             )
             chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
+    print("backfill complete")
 
 
 async def backfill_data(
@@ -89,22 +92,23 @@ async def backfill_data(
 ):
     async for height in get_missing_blocks(pool, session, chain):
         if await process_block(chain=chain, height=height, pool=pool, session=session):
-            print(f"backfilled block {height} - {chain.chain_id}")
+            print(f"backfilled block - {height}")
         else:
-            print(f"failed to backfill block {height} - {chain.chain_id}")
-
-
-async def listen_raw_blocks(conn, pid, channel, payload):
-    print(f"New block: {payload}")
-    chain_id, height = payload.split(" ")
-    height = int(height)
-    raw_block = await conn.fetch(
-        "SELECT * FROM raw WHERE chain_id = $1 AND height = $2", chain_id, height
-    )
-    chain_id, height, block, txs = raw_block
+            print(f"failed to backfill block - {height}")
+    print("backfill complete")
 
 
 async def main():
+    print(os.getenv("APIS").split(","))
+    print(os.getenv("TXS_ENDPOINT"))
+
+    chain = CosmosChain(
+        # chain_isd=os.getenv("CHAIN_ID"),
+        min_block_height=int(os.getenv("MIN_BLOCK_HEIGHT")),
+        blocks_endpoint=os.getenv("BLOCKS_ENDPOINT"),
+        txs_endpoint=os.getenv("TXS_ENDPOINT"),
+        apis=os.getenv("APIS").split(","),
+    )
 
     async with asyncpg.create_pool(
         host=os.getenv("POSTGRES_HOST"),
@@ -119,11 +123,67 @@ async def main():
 
         await create_tables(pool)
 
+        # print(f"{msg_cols=} {log_cols=}")
+
+        conn = await pool.acquire()
+
+        async def tx_listener(conn, pid, channel, payload):
+            print(f"New tx: {payload}")
+            txhash, chain_id = payload.split(" ")
+            # print(f"New tx: {txhash} - {chain_id}")
+            async with pool.acquire() as conn:
+                data = await conn.fetchrow(
+                    "SELECT logs, tx FROM txs WHERE chain_id = $1 AND txhash = $2",
+                    chain_id,
+                    txhash,
+                )
+                logs, tx = data
+                messages = json.loads(tx)["body"]["messages"]
+                msg_cols = set(await get_table_cols(pool, "messages"))
+                log_cols = set(await get_table_cols(pool, "logs"))
+                msgs, cur_msg_cols = parse_messages(messages, txhash)
+                logs, cur_log_cols = parse_logs(logs, txhash)
+
+                # print(f"{msg_cols=} {cur_msg_cols=} {log_cols=} {cur_log_cols=}")
+                new_msg_cols = cur_msg_cols.difference(msg_cols)
+                new_log_cols = cur_log_cols.difference(log_cols)
+
+                if len(new_msg_cols) > 0:
+                    print(f"txhash: {txhash} new_msg_cols: {len(new_msg_cols)}")
+                    await add_columns(pool, "messages", list(new_msg_cols))
+
+                async with conn.transaction():
+                    for msg in msgs:
+                        keys = ",".join(msg.keys())
+                        values = "'" + "','".join(str(i) for i in msg.values()) + "'"
+                        # print(f"INSERT INTO messages ({keys}) VALUES ({values})")
+                        try:
+                            await conn.execute(
+                                f"""
+                                INSERT INTO messages ({keys})
+                                VALUES ({values})
+                                """
+                            )
+                        except asyncpg.PostgresSyntaxError as e:
+                            print(txhash, traceback.format_exc())
+
+                print(f"updated messages for {txhash}")
+                # print("updated", (await get_table_cols(pool, "messages")))
+                # cur_columns_raw = await conn.fetch(
+                #     "SELECT column_name FROM information_schema.columns WHERE table_name = 'messages'"
+                # )
+                # cur_columns = [col["column_name"] for col in cur_columns_raw]
+
         async with aiohttp.ClientSession() as session:
+            block_data = await chain.get_block(session)
+            chain_id = block_data["block"]["header"]["chain_id"]
+            print(f"chain_id: {chain_id}")
             await asyncio.gather(
-                *[get_live_chain_data(chain, pool, session) for chain in chain_mapping],
-                *[backfill_data(chain, pool, session) for chain in chain_mapping]
-                # conn.add_listener("raw_blocks", listen_raw_blocks),
+                get_live_chain_data(chain, pool, session),
+                backfill_data(chain, pool, session),
+                conn.add_listener(f"txs_to_messages_logs", tx_listener),
+                # conn.add_listener(f"txs_to_logs", listen_raw_blocks),
+                return_exceptions=True,
             )
 
 

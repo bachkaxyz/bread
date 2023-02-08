@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS raw (
     height BIGINT NOT NULL,
     block JSONB,      
     txs JSONB,
+    blocks_txs_parsed_at TIMESTAMP DEFAULT NULL,
+    messages_parsed_at TIMESTAMP DEFAULT NULL,
+    logs_parsed_at TIMESTAMP DEFAULT NULL,
                 
     PRIMARY KEY (chain_id, height)
 );
@@ -34,4 +37,18 @@ CREATE TABLE IF NOT EXISTS txs (
     timestamp TIMESTAMP,
     
     FOREIGN KEY (chain_id, height) REFERENCES blocks (chain_id, height)
+);
+CREATE TABLE IF NOT EXISTS messages (
+    txhash TEXT NOT NULL,
+    msg_index INTEGER NOT NULL,
+    
+    PRIMARY KEY (txhash, msg_index),
+    FOREIGN KEY (txhash) REFERENCES txs (txhash)
+);
+CREATE TABLE IF NOT EXISTS logs (
+    txhash TEXT NOT NULL,
+    msg_index TEXT NOT NULL,
+    
+    PRIMARY KEY (txhash, msg_index),
+    FOREIGN KEY (txhash, msg_index) REFERENCES messages (txhash, msg_index)
 );

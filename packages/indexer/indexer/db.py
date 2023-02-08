@@ -1,10 +1,10 @@
 import json
 import os
+from typing import List
 import aiohttp
 
 import asyncpg
-from indexer.chain_mapper import CosmosChain
-from indexer.data import get_block
+from indexer.chain import CosmosChain
 
 
 async def drop_tables(pool: asyncpg.pool):
@@ -13,8 +13,22 @@ async def drop_tables(pool: asyncpg.pool):
         DROP TABLE IF EXISTS raw CASCADE;
         DROP TABLE IF EXISTS blocks CASCADE;
         DROP TABLE IF EXISTS txs CASCADE;
+        DROP TABLE IF EXISTS messages CASCADE;
         """
     )
+
+
+async def get_table_cols(pool: asyncpg.pool, table_name):
+    async with pool.acquire() as conn:
+        cols = await conn.fetch(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public' AND table_name = $1;
+            """,
+            table_name,
+        )
+        return [col["column_name"] for col in cols]
 
 
 async def create_tables(pool: asyncpg.pool):
@@ -48,11 +62,6 @@ async def upsert_block(pool: asyncpg.pool, block: dict, txs: dict):
             json.dumps(txs),
         )
         # for some reason this doesn't support params
-        await conn.execute(
-            f"""
-            NOTIFY raw, '{chain_id} {height}';
-            """
-        )
 
 
 async def get_missing_blocks(
@@ -60,8 +69,9 @@ async def get_missing_blocks(
 ):
 
     while True:
-        block_data = await get_block(session, chain.apis[chain.current_api_index])
+        block_data = await chain.get_block(session)
         current_block = int(block_data["block"]["header"]["height"])
+        chain_id = block_data["block"]["header"]["chain_id"]
         async with pool.acquire() as conn:
             rows = await conn.fetch(
                 """
@@ -72,7 +82,7 @@ async def get_missing_blocks(
                 ) as dif
                 where difference_per_block <> 1
                 """,
-                chain.chain_id,
+                chain_id,
             )
             for height, dif in rows:
                 if dif == -1:
@@ -80,3 +90,14 @@ async def get_missing_blocks(
                 else:
                     for i in range(height - dif, height):
                         yield i
+
+
+async def add_columns(pool: asyncpg.pool, table_name: str, new_cols: List[str]):
+    async with pool.acquire() as conn:
+        alter_table = f"""
+            ALTER TABLE {table_name}
+            {
+                ", ".join([f"ADD COLUMN IF NOT EXISTS {col} TEXT" for col in new_cols])
+            }
+        """
+        await conn.execute(alter_table)
