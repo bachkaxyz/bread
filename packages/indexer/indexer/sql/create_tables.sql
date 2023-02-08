@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS txs (
 );
 CREATE TABLE IF NOT EXISTS messages (
     txhash TEXT NOT NULL,
-    msg_index INTEGER NOT NULL,
+    msg_index TEXT NOT NULL,
     
     PRIMARY KEY (txhash, msg_index),
     FOREIGN KEY (txhash) REFERENCES txs (txhash)

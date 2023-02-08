@@ -10,6 +10,7 @@ def parse_logs(raw_logs: dict, txhash: str):
             log_dic.update(flatten_logs(event))
         log_dic["txhash"] = txhash
         log_dic["msg_index"] = msg_index
+        log_dic = {fix_entry(k): fix_entry(v) for k, v in log_dic.items()}
         log_cols.update(log_dic.keys())
         logs.append(log_dic)
     return logs, log_cols
@@ -18,19 +19,23 @@ def parse_logs(raw_logs: dict, txhash: str):
 def flatten_logs(event):
     log_dic = {}
     type = event["type"]
-
-    for attr in event["attributes"]:
-        log_dic[f"{type}_{attr['key']}"] = attr["value"]
-    # if key == "attributes":
-    #     for i, attr in enumerate(value):
-    #         log_dic[f"{key}_{i}"] = attr
-    # else:
-    #     log_dic[key] = value
+    if type == "wasm":
+        for a in event["attributes"]:
+            key = a["key"]
+            if key == "contract_address":
+                value = a["value"] if "value" in a.keys() else None
+                wasm_dict = {"wasm_key": key, "wasm_value": value}
+                log_dic.update(wasm_dict)
+            else:
+                pass
+    else:
+        for attr in event["attributes"]:
+            log_dic[f"{type}_{attr['key']}"] = attr["value"]
     return log_dic
 
 
 def fix_entry(s: any) -> str:
-    return str(s)
+    return str(s).replace(".", "_").replace("/", "_").replace("-", "_").replace("@", "")
 
 
 def flatten_msg(msg: dict):
@@ -55,16 +60,7 @@ def parse_messages(messages: dict, txhash: str):
     for msg_index, msg in enumerate(messages):
         msg_dic = flatten_msg(msg)
 
-        msg_dic = {
-            str(k)
-            .replace(".", "_")
-            .replace("/", "_")
-            .replace("-", "_")
-            .replace("@", ""): str(v)
-            .replace(".", "_")
-            .replace("/", "_")
-            for k, v in msg_dic.items()
-        }
+        msg_dic = {fix_entry(k): fix_entry(v) for k, v in msg_dic.items()}
         msg_dic["txhash"] = txhash
         msg_dic["msg_index"] = msg_index
         msg_cols.update(msg_dic.keys())

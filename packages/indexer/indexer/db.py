@@ -14,6 +14,7 @@ async def drop_tables(pool: asyncpg.pool):
         DROP TABLE IF EXISTS blocks CASCADE;
         DROP TABLE IF EXISTS txs CASCADE;
         DROP TABLE IF EXISTS messages CASCADE;
+        DROP TABLE IF EXISTS logs CASCADE;
         """
     )
 

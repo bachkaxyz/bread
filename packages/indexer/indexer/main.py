@@ -11,7 +11,6 @@ from indexer.db import (
     get_table_cols,
     upsert_block,
 )
-from flatten_json import flatten
 from indexer.parser import parse_logs, parse_messages
 
 load_dotenv()
@@ -152,6 +151,10 @@ async def main():
                     print(f"txhash: {txhash} new_msg_cols: {len(new_msg_cols)}")
                     await add_columns(pool, "messages", list(new_msg_cols))
 
+                if len(new_log_cols) > 0:
+                    print(f"txhash: {txhash} new_log_cols: {new_log_cols}")
+                    await add_columns(pool, "logs", list(new_log_cols))
+
                 async with conn.transaction():
                     for msg in msgs:
                         keys = ",".join(msg.keys())
@@ -165,7 +168,20 @@ async def main():
                                 """
                             )
                         except asyncpg.PostgresSyntaxError as e:
-                            print(txhash, traceback.format_exc())
+                            print("messages", txhash, traceback.format_exc())
+                    for log in logs:
+                        keys = ",".join(log.keys())
+                        values = "'" + "','".join(str(i) for i in log.values()) + "'"
+                        # print(f"INSERT INTO messages ({keys}) VALUES ({values})")
+                        try:
+                            await conn.execute(
+                                f"""
+                                INSERT INTO logs ({keys})
+                                VALUES ({values})
+                                """
+                            )
+                        except asyncpg.PostgresSyntaxError as e:
+                            print("logs", txhash, traceback.format_exc())
 
                 print(f"updated messages for {txhash}")
                 # print("updated", (await get_table_cols(pool, "messages")))
