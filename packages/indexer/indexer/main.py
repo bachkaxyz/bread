@@ -70,7 +70,6 @@ async def get_live_chain_data(
                     else:
                         # should we save this to db?
                         print(f"failed to process block - {current_block}")
-
             else:
                 print(f"block_data is None")
                 # save error to db
@@ -132,7 +131,7 @@ async def main():
             # print(f"New tx: {txhash} - {chain_id}")
             async with pool.acquire() as conn:
                 data = await conn.fetchrow(
-                    "SELECT logs, tx FROM txs WHERE chain_id = $1 AND txhash = $2",
+                    "SELECT raw_log, tx FROM txs WHERE chain_id = $1 AND txhash = $2",
                     chain_id,
                     txhash,
                 )
@@ -152,7 +151,7 @@ async def main():
                     await add_columns(pool, "messages", list(new_msg_cols))
 
                 if len(new_log_cols) > 0:
-                    print(f"txhash: {txhash} new_log_cols: {new_log_cols}")
+                    print(f"txhash: {txhash} new_log_cols: {len(new_log_cols)}")
                     await add_columns(pool, "logs", list(new_log_cols))
 
                 async with conn.transaction():
@@ -195,8 +194,8 @@ async def main():
             chain_id = block_data["block"]["header"]["chain_id"]
             print(f"chain_id: {chain_id}")
             await asyncio.gather(
-                get_live_chain_data(chain, pool, session),
                 backfill_data(chain, pool, session),
+                get_live_chain_data(chain, pool, session),
                 conn.add_listener(f"txs_to_messages_logs", tx_listener),
                 # conn.add_listener(f"txs_to_logs", listen_raw_blocks),
                 return_exceptions=True,

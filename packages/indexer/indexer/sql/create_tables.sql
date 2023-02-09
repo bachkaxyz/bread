@@ -48,7 +48,17 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE TABLE IF NOT EXISTS logs (
     txhash TEXT NOT NULL,
     msg_index TEXT NOT NULL,
+    unparsed_columns JSONB,
+    -- other columns added by the indexer
     
     PRIMARY KEY (txhash, msg_index),
     FOREIGN KEY (txhash, msg_index) REFERENCES messages (txhash, msg_index)
+);
+
+CREATE TABLE IF NOT EXISTS log_columns (
+    event TEXT NOT NULL,
+    attribute TEXT NOT NULL,
+    parse BOOLEAN NOT NULL,
+
+    PRIMARY KEY (event, attribute)
 );
