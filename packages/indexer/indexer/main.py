@@ -97,6 +97,8 @@ async def backfill_data(
     print("backfill complete")
 
 
+msg_cols, log_cols = None, None
+
 async def main():
     print(os.getenv("APIS").split(","))
     print(os.getenv("TXS_ENDPOINT"))
@@ -121,14 +123,17 @@ async def main():
 
         await create_tables(pool)
 
-        # print(f"{msg_cols=} {log_cols=}")
-
-                
         async def handle_notifications(
             notification: asyncpg_listen.NotificationOrTimeout,
         ) -> None:
+            global msg_cols, log_cols
             if isinstance(notification, asyncpg_listen.Timeout):
                 return
+            
+            if msg_cols is None or log_cols is None:
+                print("cols are none")
+                msg_cols = set(await get_table_cols(pool, "messages"))
+                log_cols = set(await get_table_cols(pool, "log"))
 
             payload = notification.payload
             print(f"New tx: {payload}")
@@ -142,14 +147,14 @@ async def main():
                 )
                 logs, tx = data
                 messages = json.loads(tx)["body"]["messages"]
-                msg_cols = set(await get_table_cols(pool, "messages"))
-                log_cols = set(await get_table_cols(pool, "logs"))
                 msgs, cur_msg_cols = parse_messages(messages, txhash)
                 logs, cur_log_cols = parse_logs(logs, txhash)
 
                 # print(f"{msg_cols=} {cur_msg_cols=} {log_cols=} {cur_log_cols=}")
                 new_msg_cols = cur_msg_cols.difference(msg_cols)
                 new_log_cols = cur_log_cols.difference(log_cols)
+                msg_cols = msg_cols.union(new_msg_cols)
+                log_cols = log_cols.union(new_log_cols)
 
                 if len(new_msg_cols) > 0:
                     print(f"txhash: {txhash} new_msg_cols: {len(new_msg_cols)}")
