@@ -12,6 +12,7 @@ from indexer.db import (
     upsert_block,
 )
 from indexer.parser import parse_logs, parse_messages
+import asyncpg_listen
 
 load_dotenv()
 
@@ -114,7 +115,6 @@ async def main():
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
-        command_timeout=60,
     ) as pool:
         # drop tables for testing purposes
         await drop_tables(pool)
@@ -123,9 +123,14 @@ async def main():
 
         # print(f"{msg_cols=} {log_cols=}")
 
-        conn = await pool.acquire()
+                
+        async def handle_notifications(
+            notification: asyncpg_listen.NotificationOrTimeout,
+        ) -> None:
+            if isinstance(notification, asyncpg_listen.Timeout):
+                return
 
-        async def tx_listener(conn, pid, channel, payload):
+            payload = notification.payload
             print(f"New tx: {payload}")
             txhash, chain_id = payload.split(" ")
             # print(f"New tx: {txhash} - {chain_id}")
@@ -189,18 +194,32 @@ async def main():
                 # )
                 # cur_columns = [col["column_name"] for col in cur_columns_raw]
 
+        listener = asyncpg_listen.NotificationListener(
+            asyncpg_listen.connect_func(        
+                host=os.getenv("POSTGRES_HOST"),
+                port=os.getenv("POSTGRES_PORT"),
+                user=os.getenv("POSTGRES_USER"),
+                password=os.getenv("POSTGRES_PASSWORD"),
+                database=os.getenv("POSTGRES_DB")
+            )
+        )
+    
         async with aiohttp.ClientSession() as session:
             block_data = await chain.get_block(session)
             chain_id = block_data["block"]["header"]["chain_id"]
             print(f"chain_id: {chain_id}")
+
             await asyncio.gather(
-                backfill_data(chain, pool, session),
-                get_live_chain_data(chain, pool, session),
-                conn.add_listener(f"txs_to_messages_logs", tx_listener),
-                # conn.add_listener(f"txs_to_logs", listen_raw_blocks),
+                asyncio.create_task(
+                    listener.run(
+                        {"txs_to_messages_logs": handle_notifications},
+                        policy=asyncpg_listen.ListenPolicy.ALL,
+                    )
+                ),
+                asyncio.create_task(backfill_data(chain, pool, session)),
+                asyncio.create_task(get_live_chain_data(chain, pool, session)),
                 return_exceptions=True,
             )
-
 
 if __name__ == "__main__":
     asyncio.run(main())
