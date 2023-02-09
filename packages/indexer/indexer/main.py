@@ -123,7 +123,7 @@ async def main():
 
         await create_tables(pool)
 
-        async def handle_notifications(
+        async def handle_tx_notifications(
             notification: asyncpg_listen.NotificationOrTimeout,
         ) -> None:
             global msg_cols, log_cols
@@ -217,7 +217,7 @@ async def main():
             await asyncio.gather(
                 asyncio.create_task(
                     listener.run(
-                        {"txs_to_messages_logs": handle_notifications},
+                        {"txs_to_messages_logs": handle_tx_notifications},
                         policy=asyncpg_listen.ListenPolicy.ALL,
                     )
                 ),
