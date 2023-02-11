@@ -5,13 +5,16 @@ from dotenv import load_dotenv
 from indexer.chain import CosmosChain
 from indexer.db import (
     add_columns,
+    add_current_log_columns,
+    add_logs,
     create_tables,
     drop_tables,
     get_missing_blocks,
     get_table_cols,
+    insert_dict,
     upsert_block,
 )
-from indexer.parser import parse_logs, parse_messages
+from indexer.parser import Log, parse_logs, parse_messages
 import asyncpg_listen
 
 load_dotenv()
@@ -145,60 +148,39 @@ async def main():
                     chain_id,
                     txhash,
                 )
-                logs, tx = data
-                messages = json.loads(tx)["body"]["messages"]
-                msgs, cur_msg_cols = parse_messages(messages, txhash)
-                logs, cur_log_cols = parse_logs(logs, txhash)
+            raw_logs, raw_tx = data
+            logs: List[Log]
+            messages = json.loads(raw_tx)["body"]["messages"]
+            msgs, cur_msg_cols = parse_messages(messages, txhash)
+            logs, cur_log_cols = parse_logs(raw_logs, txhash)
+            # print(logs)
+            # print(f"{msg_cols=} {cur_msg_cols=} {log_cols=} {cur_log_cols=}")
+            new_msg_cols = cur_msg_cols.difference(msg_cols)
+            # new_log_cols = cur_log_cols.difference(log_cols)
+            msg_cols = msg_cols.union(new_msg_cols)
+            # log_cols = log_cols.union(new_log_cols)
+            await add_current_log_columns(pool, cur_log_cols)
 
-                # print(f"{msg_cols=} {cur_msg_cols=} {log_cols=} {cur_log_cols=}")
-                new_msg_cols = cur_msg_cols.difference(msg_cols)
-                new_log_cols = cur_log_cols.difference(log_cols)
-                msg_cols = msg_cols.union(new_msg_cols)
-                log_cols = log_cols.union(new_log_cols)
+            if len(new_msg_cols) > 0:
+                print(f"txhash: {txhash} new_msg_cols: {len(new_msg_cols)}")
+                await add_columns(pool, "messages", list(new_msg_cols))
 
-                if len(new_msg_cols) > 0:
-                    print(f"txhash: {txhash} new_msg_cols: {len(new_msg_cols)}")
-                    await add_columns(pool, "messages", list(new_msg_cols))
+            # if len(new_log_cols) > 0:
+            #     print(f"txhash: {txhash} new_log_cols: {len(new_log_cols)}")
+            #     await add_columns(pool, "logs", list(new_log_cols))
+            
 
-                if len(new_log_cols) > 0:
-                    print(f"txhash: {txhash} new_log_cols: {len(new_log_cols)}")
-                    await add_columns(pool, "logs", list(new_log_cols))
-
-                async with conn.transaction():
-                    for msg in msgs:
-                        keys = ",".join(msg.keys())
-                        values = "'" + "','".join(str(i) for i in msg.values()) + "'"
-                        # print(f"INSERT INTO messages ({keys}) VALUES ({values})")
-                        try:
-                            await conn.execute(
-                                f"""
-                                INSERT INTO messages ({keys})
-                                VALUES ({values})
-                                """
-                            )
-                        except asyncpg.PostgresSyntaxError as e:
-                            print("messages", txhash, traceback.format_exc())
-                    for log in logs:
-                        keys = ",".join(log.keys())
-                        values = "'" + "','".join(str(i) for i in log.values()) + "'"
-                        # print(f"INSERT INTO messages ({keys}) VALUES ({values})")
-                        try:
-                            await conn.execute(
-                                f"""
-                                INSERT INTO logs ({keys})
-                                VALUES ({values})
-                                """
-                            )
-                        except asyncpg.PostgresSyntaxError as e:
-                            print("logs", txhash, traceback.format_exc())
-
-                print(f"updated messages for {txhash}")
-                # print("updated", (await get_table_cols(pool, "messages")))
-                # cur_columns_raw = await conn.fetch(
-                #     "SELECT column_name FROM information_schema.columns WHERE table_name = 'messages'"
-                # )
-                # cur_columns = [col["column_name"] for col in cur_columns_raw]
-
+            if not await insert_dict(pool, "messages", msgs):
+                # log error
+                pass
+            
+            await add_logs(pool, logs)
+            # if not await insert_dict(pool, "logs", logs):
+                ## log error
+                # pass
+            
+            print(f"updated messages for {txhash}")
+               
         listener = asyncpg_listen.NotificationListener(
             asyncpg_listen.connect_func(        
                 host=os.getenv("POSTGRES_HOST"),

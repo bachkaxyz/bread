@@ -1,10 +1,12 @@
 import json
 import os
+import traceback
 from typing import List
 import aiohttp
 
 import asyncpg
 from indexer.chain import CosmosChain
+from indexer.parser import Log
 
 
 async def drop_tables(pool: asyncpg.pool):
@@ -15,6 +17,7 @@ async def drop_tables(pool: asyncpg.pool):
         DROP TABLE IF EXISTS txs CASCADE;
         DROP TABLE IF EXISTS messages CASCADE;
         DROP TABLE IF EXISTS logs CASCADE;
+        DROP TABLE IF EXISTS log_columns CASCADE;
         """
     )
 
@@ -42,6 +45,10 @@ async def create_tables(pool: asyncpg.pool):
 
         # create the parse_raw function on insert trigger of raw
         file_path = os.path.join(cur_dir, "sql/parse_raw.sql")
+        with open(file_path, "r") as f:
+            await conn.execute(f.read())
+            
+        file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
         with open(file_path, "r") as f:
             await conn.execute(f.read())
 
@@ -102,3 +109,58 @@ async def add_columns(pool: asyncpg.pool, table_name: str, new_cols: List[str]):
             }
         """
         await conn.execute(alter_table)
+
+async def add_current_log_columns(pool: asyncpg.pool, new_cols: List[tuple[str, str]]):
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for i, row in enumerate(new_cols):
+                await conn.execute(
+                    f"""
+                    INSERT INTO log_columns (event, attribute)
+                    VALUES ($1, $2)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    row[0], row[1]
+                )
+                
+                
+async def add_logs(pool: asyncpg.pool, logs: List[Log]):
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for log in logs:
+                await conn.execute(
+                    """
+                    INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
+                    VALUES (
+                        $1, $2, $3, $4, $5
+                    )
+                    """,
+                    log.txhash,
+                    str(log.msg_index),
+                    log.dump(),
+                    log.failed,
+                    str(log.failed_msg), 
+                )
+    
+        
+        
+async def insert_dict(pool: asyncpg.pool, table_name: str, data: List[dict]) -> bool:
+    """
+    Insert a list of dicts into a table with keys as columns and values as values
+    """
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for row in data:
+                keys = ",".join(row.keys())
+                values = "'" + "','".join(str(i) for i in row.values()) + "'"
+                try:
+                    await conn.execute(
+                        f"""
+                        INSERT INTO {table_name} ({keys})
+                        VALUES ({values})
+                        """
+                    )
+                except asyncpg.PostgresSyntaxError as e:
+                    print(table_name, traceback.format_exc())
+                    return False
+    return True

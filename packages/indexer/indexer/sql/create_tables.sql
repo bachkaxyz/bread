@@ -47,8 +47,10 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE TABLE IF NOT EXISTS logs (
     txhash TEXT NOT NULL,
-    msg_index TEXT NOT NULL,
+    msg_index TEXT NOT NULL, -- This should be an int
     parsed JSONB,
+    failed BOOLEAN NOT NULL DEFAULT FALSE,
+    failed_msg TEXT,
     
     PRIMARY KEY (txhash, msg_index),
     FOREIGN KEY (txhash, msg_index) REFERENCES messages (txhash, msg_index)

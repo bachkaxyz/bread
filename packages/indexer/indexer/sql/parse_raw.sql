@@ -51,33 +51,3 @@ CREATE OR REPLACE TRIGGER raw_insert
 BEFORE INSERT
 ON raw
 FOR EACH ROW EXECUTE PROCEDURE parse_raw();
-
-CREATE OR REPLACE FUNCTION on_log_column_change() RETURNS TRIGGER AS
-$$
-    DECLARE
-        column_name TEXT;
-        unparsed_columns JSONB;
-    BEGIN
-        column_name := NEW.event || NEW.attribute;
-        IF NEW.parse = TRUE THEN
-            EXECUTE format(
-                'ALTER TABLE logs ADD COLUMN IF NOT EXISTS %I TEXT',
-                column_name
-            );
-            -- Look for the key in the parsed data
-            -- insert the value into the new column
-            
-        ELSE
-            EXECUTE format(
-                'ALTER TABLE logs DROP COLUMN IF EXISTS %I',
-                column_name
-            );
-        END IF;
-        RETURN NEW;
-    END
-$$
-LANGUAGE plpgsql;
-CREATE OR REPLACE TRIGGER log_column_change
-AFTER UPDATE
-ON log_columns
-FOR EACH ROW EXECUTE PROCEDURE on_log_column_change();

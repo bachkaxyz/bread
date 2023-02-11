@@ -1,33 +1,50 @@
+from dataclasses import dataclass
 import json
 import time
+from typing import List, Tuple
 import pandas as pd
 
+@dataclass
+class Log:
+    txhash: str
+    failed_msg: str = None
+    failed: bool = False
+    msg_index: int = 0
+    event_attributes = {}
+    
+    def get_cols(self):
+        return set(self.event_attributes.keys())
+    
+        
+    def fix_entries(self):
+        self.event_attributes = {(fix_entry(k[0]), fix_entry(k[1])): fix_entry(v) for k, v in self.event_attributes.items()}
+    
+    def dump(self):
+        final = {}
+        for k, v in self.event_attributes.items():
+            event, attr = k
+            final[f'{event}_{attr}'] = v
+        return json.dumps(final)
 
-def parse_logs(raw_logs: str, txhash: str):
-    logs = []
+    
+
+def parse_logs(raw_logs: str, txhash: str) -> Tuple[List[Log], List[str]]:
+    logs: List[Log] = []
     log_cols = set()
     try:  # try to parse the logs as json, if it fails, it's a string error message (i dont like this but....)
         raw_logs = json.loads(raw_logs)
     except:
-        return [
-            {
-                "failed": True,
-                "txhash": txhash,
-                "msg_index": 0,
-                "error_msg": raw_logs,
-            }
-        ], set(["failed", "txhash", "msg_index", "error_msg"])
+        return [Log(txhash, failed=True, failed_msg=raw_logs)], []
 
-    for msg_index, log in enumerate(raw_logs):
-        log_dic = {}
-        for i, event in enumerate(log["events"]):
-            log_dic.update(flatten_logs(event))
-        log_dic["txhash"] = txhash
-        log_dic["msg_index"] = msg_index
-        log_dic = {fix_entry(k): fix_entry(v) for k, v in log_dic.items()}
-        log_dic["failed"] = False
-        log_cols.update(log_dic.keys())
-        logs.append(log_dic)
+    for msg_index, raw_log in enumerate(raw_logs): # for each message
+        log = Log(txhash=txhash, msg_index=msg_index)
+        # for each event in the message
+        for i, event in enumerate(raw_log["events"]):
+            updated_log_dic = parse_log_event(event)
+            log.event_attributes.update(updated_log_dic)
+        log.fix_entries()
+        log_cols.update(log.get_cols())
+        logs.append(log)
     return logs, log_cols
 
 
@@ -35,42 +52,28 @@ types = set()
 packet_payloads = []
 
 
-def flatten_logs(event):
+def parse_log_event(event):
     log_dic = {}
     type = event["type"]
     log_cols = set()
-    valid_packet_payloads = [
-        "packet_connection",
-        "packet_src_channel",
-        "packet_dst_channel",
-        "packet_src_port",
-        "packet_timeout_timestamp",
-        "packet_timeout_timestamp",
-        "packet_data",
-    ]
     if type == "wasm":
         for a in event["attributes"]:
             key = a["key"]
             if key == "contract_address":
                 value = a["value"] if "value" in a.keys() else None
-                wasm_dict = {"wasm_key": key, "wasm_value": value}
+                wasm_dict = {("wasm", "key"): key, ("wasm", "value"): value}
                 log_dic.update(wasm_dict)
-                log_cols.add("wasm_key")
-                log_cols.add("wasm_value")
+                log_cols.add(("wasm", "key"))
+                log_cols.add(("wasm", "value"))
             else:
                 pass
     else:
         for attr in event["attributes"]:
-            if (
-                not attr["key"].startswith("packet")
-                or attr["key"] in valid_packet_payloads
-            ):
-                log_cols.add(attr["key"])
-                log_dic[f"{type}_{attr['key']}"] = (
-                    attr["value"] if "value" in attr.keys() else ""
-                )
-            else:
-                packet_payloads.append(str({attr["key"]: attr["value"]}))
+            log_cols.add((type, attr["key"]))
+            log_dic[(type, attr['key'])] = (
+                attr["value"] if "value" in attr.keys() else ""
+            )
+            # packet_payloads.append(str({type + "|" + attr["key"]: attr["value"]}))
     # types.add(json.dumps({type: list(log_cols)}))
     return log_dic
 
