@@ -1,9 +1,5 @@
-CREATE OR REPLACE FUNCTION parse_raw() RETURNS TRIGGER AS 
-$$
-    DECLARE
-        tx JSONB;
-        tx_responses JSONB;
-        notify_channel TEXT;
+CREATE OR REPLACE FUNCTION parse_raw_block() RETURNS TRIGGER AS
+$$ 
     BEGIN
         INSERT INTO blocks (height, chain_id, time, block_hash, proposer_address)
         VALUES (
@@ -14,6 +10,32 @@ $$
             (NEW.block->'block'->'header'->>'proposer_address')::TEXT
         )
         ON CONFLICT DO NOTHING;
+        
+        RETURN NEW;
+    END
+$$
+LANGUAGE plpgsql;
+CREATE OR REPLACE TRIGGER raw_block_insert
+BEFORE INSERT
+ON raw_blocks
+FOR EACH ROW EXECUTE PROCEDURE parse_raw_block();
+
+CREATE OR REPLACE FUNCTION parse_raw_txs() RETURNS TRIGGER AS 
+$$
+    DECLARE
+        tx JSONB;
+        tx_responses JSONB;
+        notify_channel TEXT;
+    BEGIN
+        -- INSERT INTO blocks (height, chain_id, time, block_hash, proposer_address)
+        -- VALUES (
+        --     NEW.height,
+        --     NEW.chain_id,
+        --     (NEW.block->'block'->'header'->'time')::TEXT::timestamp without time zone,
+        --     (NEW.block->'block_id'->>'hash')::TEXT,
+        --     (NEW.block->'block'->'header'->>'proposer_address')::TEXT
+        -- )
+        -- ON CONFLICT DO NOTHING;
         
                 
         FOR tx_responses IN SELECT * FROM jsonb_array_elements(NEW.txs->'tx_responses')
@@ -40,14 +62,15 @@ $$
             ON CONFLICT DO NOTHING;
             
             
-            PERFORM pg_notify('txs_to_messages_logs', tx_responses->>'txhash' || ' ' || NEW.chain_id);
+            PERFORM pg_notify('txs_to_logs', tx_responses->>'txhash' || ' ' || NEW.chain_id);
         END LOOP;
         NEW.blocks_txs_parsed_at := NOW();
         RETURN NEW;
     END
 $$ 
 LANGUAGE plpgsql;
-CREATE OR REPLACE TRIGGER raw_insert
+CREATE OR REPLACE TRIGGER raw_tx_insert
 BEFORE INSERT
-ON raw
-FOR EACH ROW EXECUTE PROCEDURE parse_raw();
+ON raw_txs
+FOR EACH ROW EXECUTE PROCEDURE parse_raw_txs();
+

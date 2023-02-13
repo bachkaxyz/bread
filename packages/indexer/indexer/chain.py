@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from typing import Dict, List
 
@@ -15,17 +16,18 @@ class CosmosChain:
     async def get_block(
         self,
         session: aiohttp.ClientSession,
+        sem: asyncio.Semaphore,
         height: str = "latest",
         max_retries=5,
     ) -> dict | None:
         retries = 0
         while retries < max_retries:
             try:
-
-                async with session.get(
-                    f"{self.apis[self.current_api_index]}{self.blocks_endpoint.format(height)}"
-                ) as resp:
-                    return await resp.json()
+                async with sem:
+                    async with session.get(
+                        f"{self.apis[self.current_api_index]}{self.blocks_endpoint.format(height)}"
+                    ) as resp:
+                        return await resp.json()
             except Exception as e:
                 # print(e.__traceback__.tb_lineno, e)
                 print(
@@ -38,16 +40,18 @@ class CosmosChain:
     async def get_txs(
         self,
         session: aiohttp.ClientSession,
+        sem: asyncio.Semaphore,
         height: str,
         max_retries=5,
     ) -> dict | None:
         retries = 0
         while retries < max_retries:
             try:
-                async with session.get(
-                    f"{self.apis[self.current_api_index]}{self.txs_endpoint.format(height)}"
-                ) as resp:
-                    return await resp.json()
+                async with sem:
+                    async with session.get(
+                        f"{self.apis[self.current_api_index]}{self.txs_endpoint.format(height)}"
+                    ) as resp:
+                        return await resp.json()
             except Exception as e:
                 print(
                     f"failed to get block {height} from {self.apis[self.current_api_index]}"

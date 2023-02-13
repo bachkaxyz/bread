@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import traceback
@@ -12,10 +13,10 @@ from indexer.parser import Log
 async def drop_tables(pool: asyncpg.pool):
     await pool.execute(
         """
-        DROP TABLE IF EXISTS raw CASCADE;
+        DROP TABLE IF EXISTS raw_blocks CASCADE;
+        DROP TABLE IF EXISTS raw_txs CASCADE;
         DROP TABLE IF EXISTS blocks CASCADE;
         DROP TABLE IF EXISTS txs CASCADE;
-        DROP TABLE IF EXISTS messages CASCADE;
         DROP TABLE IF EXISTS logs CASCADE;
         DROP TABLE IF EXISTS log_columns CASCADE;
         """
@@ -53,32 +54,29 @@ async def create_tables(pool: asyncpg.pool):
             await conn.execute(f.read())
 
 
-async def upsert_block(pool: asyncpg.pool, block: dict, txs: dict):
+async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
     async with pool.acquire() as conn:
         chain_id, height = block["block"]["header"]["chain_id"], int(
             block["block"]["header"]["height"]
         )
         await conn.execute(
             """
-            INSERT INTO raw (chain_id, height, block, txs)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO raw_blocks (chain_id, height, block)
+            VALUES ($1, $2, $3)
             ON CONFLICT DO NOTHING
             """,
             chain_id,
             height,
             json.dumps(block),
-            json.dumps(txs),
         )
-        # for some reason this doesn't support params
 
 
 async def get_missing_blocks(
-    pool: asyncpg.pool, session: aiohttp.ClientSession, chain: CosmosChain
+    pool: asyncpg.pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore, chain: CosmosChain
 ):
-
     while True:
-        block_data = await chain.get_block(session)
-        current_block = int(block_data["block"]["header"]["height"])
+        block_data = await chain.get_block(session, sem)
+        current_height = int(block_data["block"]["header"]["height"])
         chain_id = block_data["block"]["header"]["chain_id"]
         async with pool.acquire() as conn:
             rows = await conn.fetch(
@@ -92,6 +90,9 @@ async def get_missing_blocks(
                 """,
                 chain_id,
             )
+            if not rows:
+                for i in range(chain.min_block_height, current_height):
+                    yield i
             for height, dif in rows:
                 if dif == -1:
                     yield chain.min_block_height

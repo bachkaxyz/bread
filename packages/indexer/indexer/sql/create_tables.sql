@@ -1,21 +1,26 @@
-CREATE TABLE IF NOT EXISTS raw (
+CREATE TABLE IF NOT EXISTS raw_blocks (
     chain_id TEXT NOT NULL,
     height BIGINT NOT NULL,
-    block JSONB,      
-    txs JSONB,
-    blocks_txs_parsed_at TIMESTAMP DEFAULT NULL,
-    messages_parsed_at TIMESTAMP DEFAULT NULL,
-    logs_parsed_at TIMESTAMP DEFAULT NULL,
-                
+    block JSONB,
+    parsed_at TIMESTAMP DEFAULT NULL,
+    
     PRIMARY KEY (chain_id, height)
 );
 CREATE TABLE IF NOT EXISTS blocks (
     height BIGINT NOT NULL,
     chain_id TEXT NOT NULL,
-    time TIMESTAMP NOT NULL,
+    time TIMESTAMP NOT NULL DEFAULT NOW(),
     block_hash TEXT NOT NULL,
     proposer_address TEXT NOT NULL,
     
+    PRIMARY KEY (chain_id, height)
+);
+CREATE TABLE IF NOT EXISTS raw_txs (
+    chain_id TEXT NOT NULL,
+    height BIGINT NOT NULL,
+    txs JSONB,
+    parsed_at TIMESTAMP DEFAULT NULL,
+
     PRIMARY KEY (chain_id, height)
 );
 CREATE TABLE IF NOT EXISTS txs (
@@ -35,25 +40,29 @@ CREATE TABLE IF NOT EXISTS txs (
     gas_wanted BIGINT,
     codespace TEXT,
     timestamp TIMESTAMP,
+    logs_parsed_at TIMESTAMP DEFAULT NULL
+
     
-    FOREIGN KEY (chain_id, height) REFERENCES blocks (chain_id, height)
+    -- FOREIGN KEY (chain_id, height) REFERENCES blocks (chain_id, height)
 );
-CREATE TABLE IF NOT EXISTS messages (
-    txhash TEXT NOT NULL,
-    msg_index TEXT NOT NULL,
+-- CREATE TABLE IF NOT EXISTS messages (
+--     txhash TEXT NOT NULL,
+--     msg_index TEXT NOT NULL,
     
-    PRIMARY KEY (txhash, msg_index),
-    FOREIGN KEY (txhash) REFERENCES txs (txhash)
-);
+--     PRIMARY KEY (txhash, msg_index),
+--     FOREIGN KEY (txhash) REFERENCES txs (txhash)
+-- );
 CREATE TABLE IF NOT EXISTS logs (
     txhash TEXT NOT NULL,
     msg_index TEXT NOT NULL, -- This should be an int
     parsed JSONB,
     failed BOOLEAN NOT NULL DEFAULT FALSE,
     failed_msg TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     PRIMARY KEY (txhash, msg_index),
-    FOREIGN KEY (txhash, msg_index) REFERENCES messages (txhash, msg_index)
+    FOREIGN KEY (txhash) REFERENCES txs (txhash) -- this should be messages, but we don't have that table yet
 );
 CREATE TABLE IF NOT EXISTS log_columns (
     event TEXT NOT NULL,
