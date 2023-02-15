@@ -38,7 +38,7 @@ $$
         -- ON CONFLICT DO NOTHING;
         
                 
-        FOR tx_responses IN SELECT * FROM jsonb_array_elements(NEW.txs->'tx_responses')
+        FOR tx_responses IN SELECT * FROM jsonb_array_elements(NEW.txs) where jsonb_array_length(NEW.txs) > 0
         LOOP
             INSERT INTO txs (txhash, chain_id, height, tx_response, tx, tx_response_tx_type, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
             VALUES (
@@ -64,7 +64,7 @@ $$
             
             PERFORM pg_notify('txs_to_logs', tx_responses->>'txhash' || ' ' || NEW.chain_id);
         END LOOP;
-        NEW.blocks_txs_parsed_at := NOW();
+        NEW.parsed_at := NOW();
         RETURN NEW;
     END
 $$ 

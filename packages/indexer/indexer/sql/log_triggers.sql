@@ -17,7 +17,7 @@ $$
             FOR row IN kv_logs(column_name)
             LOOP
                 EXECUTE format(
-                    'UPDATE logs SET %I = %L WHERE txhash = %L AND msg_index = %L',
+                    'UPDATE logs SET %I = %L, updated_at=NOW() WHERE txhash = %L AND msg_index = %L',
                     column_name,
                     row.value,
                     row.txhash,
@@ -43,8 +43,6 @@ FOR EACH ROW EXECUTE PROCEDURE on_log_column_change();
 CREATE OR REPLACE FUNCTION log_insert() RETURNS TRIGGER AS
 $$
     DECLARE
-        txhash TEXT;
-        msg_index INTEGER;
         cur_log_columns cursor for 
             select event || '_' || attribute as column_name
             from log_columns
@@ -52,26 +50,15 @@ $$
     BEGIN
         FOR row IN cur_log_columns
         LOOP
-            txhash :=  NEW.txhash;
-            msg_index := NEW.msg_index;
-            EXECUTE format(
-                "
-                UPDATE logs
-                SET %I = parsed->>%I
-                WHERE txhash = '%I' AND msg_index = '%I'
-                ",
-                row.column_name,
-                row.column_name,
-                txhash,
-                msg_index
-            );
+            EXECUTE 'UPDATE logs SET ' || row.column_name ||' = parsed->>' || quote_literal(row.column_name) || ', updated_at=NOW() WHERE txhash =' || quote_literal(NEW.txhash) || ' AND msg_index =' || quote_literal(NEW.msg_index::TEXt) || ';';
         END LOOP;
-        NEW.updated_at := NOW();
         RETURN NEW;
     END
 $$
 LANGUAGE plpgsql;
--- CREATE OR REPLACE TRIGGER log_insert
--- BEFORE INSERT
--- on logs
--- FOR EACH ROW EXECUTE PROCEDURE log_insert();
+CREATE OR REPLACE TRIGGER log_insert
+AFTER INSERT
+on logs
+FOR EACH ROW EXECUTE PROCEDURE log_insert();
+ 
+ 

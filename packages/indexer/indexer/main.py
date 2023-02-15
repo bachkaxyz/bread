@@ -1,4 +1,5 @@
 import asyncio, aiohttp, json, asyncpg, os
+from collections import defaultdict
 import traceback
 from typing import List
 from dotenv import load_dotenv
@@ -13,6 +14,7 @@ from indexer.db import (
     get_table_cols,
     insert_dict,
     upsert_raw_blocks,
+    upsert_raw_txs,
 )
 from indexer.parser import Log, parse_logs, parse_messages
 import asyncpg_listen
@@ -112,6 +114,58 @@ async def backfill_blocks(
             print(f"blocks inserted: {min(heights)} - {max(heights)}")
             tasks = []
 
+async def process_txs(min_height, max_height, chain, pool, session, sem):
+    txs_data = await chain.get_batch_txs(session, sem, min_height, max_height)
+    if txs_data is None:
+        print(f"txs_data is None")
+        return False
+    try:
+        txs = txs_data['tx_responses']
+        txs_by_height = defaultdict(list)
+        print(len(txs))
+        [txs_by_height[int(tx['height'])].append(tx) for tx in txs]
+        max_queried_height = max(txs_by_height.keys())
+        every_height = {height: txs_by_height[height] if height in txs_by_height else [] for height in range(min_height, max_queried_height + 1)}
+        await upsert_raw_txs(pool, every_height, 'secret-4')
+        return max_queried_height
+    except Exception as e:
+        print(f"upsert_txs error {repr(e)} - {min_height} - {max_height}")
+        traceback.print_exc()
+
+async def backfill_tx_range(min_height: int, max_height: int, chain: CosmosChain, pool: asyncpg.pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore):
+    max_queried_height = await process_txs(min_height, max_height, chain, pool, session, sem)
+    if max_queried_height is None:
+        # log error
+        print(f"failed to backfill txs from {min_height} to {max_height}")
+        return min_height
+    else:
+        return max_queried_height
+
+async def backfill_txs(
+    chain: CosmosChain, pool: asyncpg.pool, session: aiohttp.ClientSession,
+    sem: asyncio.Semaphore
+):
+    tasks = []
+    tx_step = 1000
+    # todo: implement proper backfilling of txs like in blocks
+    while True:
+        print("getting block txs")
+        block_data = await chain.get_block(session, sem)
+        current_height = int(block_data["block"]["header"]["height"])
+        chain_id = block_data["block"]["header"]["chain_id"]
+        async with pool.acquire() as conn:
+            max_height_db = await conn.fetchrow(
+                "SELECT MAX(height) FROM txs"
+            )
+            min_height = max_height_db[0] if max_height_db[0] is not None else chain.min_block_height
+        print(f"{min_height}")
+        next_height = min_height
+        while next_height < current_height:
+            # print(f"backfilling txs from {height} to {height + tx_step}")
+            next_height = await backfill_tx_range(next_height, next_height + tx_step, chain, pool, session, sem)
+            # if len(tasks) >= 100:
+            #     await asyncio.gather(*tasks)
+            #     tasks = []
 
 msg_cols, log_cols = None, None
 
@@ -124,6 +178,7 @@ async def main():
         min_block_height=int(os.getenv("MIN_BLOCK_HEIGHT")),
         blocks_endpoint=os.getenv("BLOCKS_ENDPOINT"),
         txs_endpoint=os.getenv("TXS_ENDPOINT"),
+        txs_batch_endpoint=os.getenv("TXS_BATCH_ENDPOINT"),
         apis=os.getenv("APIS").split(","),
     )
 
@@ -163,29 +218,27 @@ async def main():
                 )
             raw_logs, raw_tx = data
             logs: List[Log]
-            messages = json.loads(raw_tx)["body"]["messages"]
-            msgs, cur_msg_cols = parse_messages(messages, txhash)
-            logs, cur_log_cols = parse_logs(raw_logs, txhash)
-            # print(logs)
-            # print(f"{msg_cols=} {cur_msg_cols=} {log_cols=} {cur_log_cols=}")
-            new_msg_cols = cur_msg_cols.difference(msg_cols)
-            # new_log_cols = cur_log_cols.difference(log_cols)
-            msg_cols = msg_cols.union(new_msg_cols)
-            # log_cols = log_cols.union(new_log_cols)
+            # print(raw_logs)
+            # messages = json.loads(raw_tx)["body"]["messages"]
+            # msgs, cur_msg_cols = parse_messages(messages, txhash)
+            # new_msg_cols = cur_msg_cols.difference(msg_cols)
+            # msg_cols = msg_cols.union(new_msg_cols)
+            
+            logs = parse_logs(raw_logs, txhash)
+            cur_log_cols = set()
+            for log in logs:
+                cur_log_cols = cur_log_cols.union(set(log.get_cols()))
+            # print(f"{cur_log_cols}")
             await add_current_log_columns(pool, cur_log_cols)
-
-            if len(new_msg_cols) > 0:
-                print(f"txhash: {txhash} new_msg_cols: {len(new_msg_cols)}")
-                await add_columns(pool, "messages", list(new_msg_cols))
-
-            # if len(new_log_cols) > 0:
-            #     print(f"txhash: {txhash} new_log_cols: {len(new_log_cols)}")
-            #     await add_columns(pool, "logs", list(new_log_cols))
             
 
-            if not await insert_dict(pool, "messages", msgs):
-                # log error
-                pass
+            # if len(new_msg_cols) > 0:
+            #     print(f"txhash: {txhash} new_msg_cols: {len(new_msg_cols)}")
+            #     await add_columns(pool, "messages", list(new_msg_cols))
+
+            # if not await insert_dict(pool, "messages", msgs):
+            #     # log error
+            #     pass
             
             await add_logs(pool, logs)
             # if not await insert_dict(pool, "logs", logs):
@@ -193,7 +246,7 @@ async def main():
                 # pass
             
             print(f"updated messages for {txhash}")
-               
+    
         listener = asyncpg_listen.NotificationListener(
             asyncpg_listen.connect_func(        
                 host=os.getenv("POSTGRES_HOST"),
@@ -212,11 +265,12 @@ async def main():
             print(f"chain_id: {chain_id} {block_data['block']['header']['height']}")
 
             res = await asyncio.gather(
-                # listener.run(
-                #     {"txs_to_messages_logs": handle_tx_notifications},
-                #     policy=asyncpg_listen.ListenPolicy.ALL,
-                # ),
-                backfill_blocks(chain, pool, session, sem),
+                listener.run(
+                    {"txs_to_logs": handle_tx_notifications},
+                    policy=asyncpg_listen.ListenPolicy.ALL,
+                ),                
+                # backfill_blocks(chain, pool, session, sem),
+                backfill_txs(chain, pool, session, sem)
                 # get_live_chain_data(chain, pool, session, sem),
             )
             for i in res:

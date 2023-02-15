@@ -2,8 +2,7 @@ from dataclasses import dataclass
 import json
 import time
 from typing import List, Tuple
-import pandas as pd
-
+from base64 import b64decode, b64encode
 @dataclass
 class Log:
     txhash: str
@@ -28,13 +27,12 @@ class Log:
 
     
 
-def parse_logs(raw_logs: str, txhash: str) -> Tuple[List[Log], List[str]]:
+def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
     logs: List[Log] = []
-    log_cols = set()
     try:  # try to parse the logs as json, if it fails, it's a string error message (i dont like this but....)
         raw_logs = json.loads(raw_logs)
     except:
-        return [Log(txhash, failed=True, failed_msg=raw_logs)], []
+        return [Log(txhash, failed=True, failed_msg=raw_logs)]
 
     for msg_index, raw_log in enumerate(raw_logs): # for each message
         log = Log(txhash=txhash, msg_index=msg_index)
@@ -43,33 +41,32 @@ def parse_logs(raw_logs: str, txhash: str) -> Tuple[List[Log], List[str]]:
             updated_log_dic = parse_log_event(event)
             log.event_attributes.update(updated_log_dic)
         log.fix_entries()
-        log_cols.update(log.get_cols())
         logs.append(log)
-    return logs, log_cols
+    return logs
 
 
 types = set()
 packet_payloads = []
 
 
-def parse_log_event(event):
+def parse_log_event(event: dict):
     log_dic = {}
     type = event["type"]
-    log_cols = set()
     if type == "wasm":
         for a in event["attributes"]:
             key = a["key"]
             if key == "contract_address":
                 value = a["value"] if "value" in a.keys() else None
-                wasm_dict = {("wasm", "key"): key, ("wasm", "value"): value}
+                wasm_dict = {("wasm", key): value}
                 log_dic.update(wasm_dict)
-                log_cols.add(("wasm", "key"))
-                log_cols.add(("wasm", "value"))
             else:
                 pass
     else:
         for attr in event["attributes"]:
-            log_cols.add((type, attr["key"]))
+            # try:
+            #     print(b64decode(attr["key"]))
+            # except:
+            #     print(attr["key"])
             log_dic[(type, attr['key'])] = (
                 attr["value"] if "value" in attr.keys() else ""
             )
@@ -112,29 +109,29 @@ def parse_messages(messages: dict, txhash: str):
     return msgs, msg_cols
 
 
-with open("indexer/test_data.csv", "r") as f:
-    df = pd.read_csv(f)
+# with open("indexer/test_data.csv", "r") as f:
+#     df = pd.read_csv(f)
 
-l_msg = []
-l_log = []
-for i, row in df.iterrows():
-    # print(row[0])
-    tx = json.loads(row["tx"])
-    logs = row["raw_log"]
-    msgs, msg_cols = parse_messages(tx["body"]["messages"], "txhash")
-    logs, log_cols = parse_logs(logs, "txhash")
-    l_msg.extend(msgs)
-    l_log.extend(logs)
-msg_df = pd.DataFrame(l_msg)
-msg_df.to_csv("indexer/msg_data_parsed.csv")
-log_df = pd.DataFrame(l_log)
-log_df.to_csv("indexer/log_data_parsed.csv")
+# l_msg = []
+# l_log = []
+# for i, row in df.iterrows():
+#     # print(row[0])
+#     tx = json.loads(row["tx"])
+#     logs = row["raw_log"]
+#     msgs, msg_cols = parse_messages(tx["body"]["messages"], "txhash")
+#     logs, log_cols = parse_logs(logs, "txhash")
+#     l_msg.extend(msgs)
+#     l_log.extend(logs)
+# msg_df = pd.DataFrame(l_msg)
+# msg_df.to_csv("indexer/msg_data_parsed.csv")
+# log_df = pd.DataFrame(l_log)
+# log_df.to_csv("indexer/log_data_parsed.csv")
 
 
-types = list(types)
-types.sort()
-with open("indexer/types.txt", "w") as f:
-    f.write("\n".join(types))
-packet_payloads.sort()
-with open("indexer/packet_payloads.txt", "w") as f:
-    f.write("\n".join(packet_payloads))
+# types = list(types)
+# types.sort()
+# with open("indexer/types.txt", "w") as f:
+#     f.write("\n".join(types))
+# packet_payloads.sort()
+# with open("indexer/packet_payloads.txt", "w") as f:
+#     f.write("\n".join(packet_payloads))

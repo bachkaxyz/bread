@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import traceback
-from typing import List
+from typing import List, Tuple
 import aiohttp
 
 import asyncpg
@@ -19,6 +19,7 @@ async def drop_tables(pool: asyncpg.pool):
         DROP TABLE IF EXISTS txs CASCADE;
         DROP TABLE IF EXISTS logs CASCADE;
         DROP TABLE IF EXISTS log_columns CASCADE;
+        DROP TABLE IF EXISTS messages CASCADE;
         """
     )
 
@@ -70,6 +71,20 @@ async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
             json.dumps(block),
         )
 
+async def upsert_raw_txs(pool: asyncpg.pool, txs: List[dict], chain_id: str):
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for height, tx in txs.items():
+                await conn.execute(
+                    """
+                    INSERT INTO raw_txs (chain_id, height, txs)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    chain_id,
+                    height,
+                    json.dumps(tx) if len(tx) > 0 else None,
+                )
 
 async def get_missing_blocks(
     pool: asyncpg.pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore, chain: CosmosChain
@@ -99,7 +114,6 @@ async def get_missing_blocks(
                 else:
                     for i in range(height - dif, height):
                         yield i
-
 
 async def add_columns(pool: asyncpg.pool, table_name: str, new_cols: List[str]):
     async with pool.acquire() as conn:
@@ -140,7 +154,7 @@ async def add_logs(pool: asyncpg.pool, logs: List[Log]):
                     str(log.msg_index),
                     log.dump(),
                     log.failed,
-                    str(log.failed_msg), 
+                    str(log.failed_msg) if log.failed_msg else None,
                 )
     
         
