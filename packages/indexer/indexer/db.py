@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 import traceback
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import aiohttp
 
 import asyncpg
@@ -71,7 +71,7 @@ async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
             json.dumps(block),
         )
 
-async def upsert_raw_txs(pool: asyncpg.pool, txs: List[dict], chain_id: str):
+async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_id: str):
     async with pool.acquire() as conn:
         async with conn.transaction():
             for height, tx in txs.items():
@@ -101,7 +101,7 @@ async def get_missing_blocks(
                     from blocks
                     where chain_id = $1
                 ) as dif
-                where difference_per_block <> 1
+                where difference_per_block <> 1 and difference_per_block <> -1
                 """,
                 chain_id,
             )
@@ -179,3 +179,46 @@ async def insert_dict(pool: asyncpg.pool, table_name: str, data: List[dict]) -> 
                     print(table_name, traceback.format_exc())
                     return False
     return True
+
+async def get_missing_txs(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
+    """
+    Returns the MISSING blocks that we are missing txs for
+    Returns a list of tuples of (start_height, end_height) INCLUSIVE
+    """
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+                select height, difference_per_block from (
+                    select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
+                    from raw_txs
+                    where chain_id = $1
+                ) as dif
+                where difference_per_block <> 1
+        """, chain.chain_id)
+        
+        # the above query returns the difference between the two blocks that exists
+        
+        # so if we have height=7285179 and height=7285186 then the difference is 7
+        # but we really are missing the blocks between 7285179 and 7285186
+        
+        # so we add 1 to the bottom and subtract 1 from the top to get the range of blocks we need to query
+        
+        # this query returns the difference between the current block and the previous block, if there is no previous block it returns -1
+        # if dif == -1 and  if min_block_height == height and remove that row, otherwise return that number and min_block_height
+        updated_rows = []
+        for height, dif in rows:
+            if dif != -1:
+                updated_rows.append(((height - dif ) + 1, height - 1))
+            else:
+                if height == chain.min_block_height:
+                    continue
+                else:
+                    updated_rows.append((chain.min_block_height, height - 1))
+                
+        return updated_rows
+    
+async def check_backfill(pool, chain_id) -> bool:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            select max(height) from raw_blocks where chain_id = $1
+        """, chain_id)
+        return False if row[0] else True

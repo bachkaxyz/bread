@@ -1,4 +1,5 @@
 import asyncio, aiohttp, json, asyncpg, os
+import logging
 from collections import defaultdict
 import traceback
 from typing import List
@@ -8,9 +9,11 @@ from indexer.db import (
     add_columns,
     add_current_log_columns,
     add_logs,
+    check_backfill,
     create_tables,
     drop_tables,
     get_missing_blocks,
+    get_missing_txs,
     get_table_cols,
     insert_dict,
     upsert_raw_blocks,
@@ -52,48 +55,63 @@ async def process_block(
         return False
 
 
-# async def get_live_chain_data(
-#     chain: CosmosChain,
-#     pool,
-#     session: aiohttp.ClientSession,
-# ):
-#     last_block = 0
-#     while True:
-#         try:
-#             block_data = await chain.get_block(
-#                 session,
-#             )
-#             if block_data is not None:
-#                 current_block = int(block_data["block"]["header"]["height"])
-#                 if last_block >= current_block:
-#                     # print(f"{chain_id} - block {current_block} already indexed")
-#                     await asyncio.sleep(1)
-#                 else:
-#                     last_block = current_block
-#                     if await process_block(
-#                         chain=chain,
-#                         height=current_block,
-#                         pool=pool,
-#                         session=session,
-#                         block_data=block_data,
-#                     ):
-#                         print(f"processed live block - {current_block}")
-#                     else:
-#                         # should we save this to db?
-#                         print(f"failed to process block - {current_block}")
-#             else:
-#                 print(f"block_data is None")
-#                 # save error to db
+async def get_live_chain_data(
+    chain: CosmosChain,
+    pool,
+    session: aiohttp.ClientSession,
+    sem: asyncio.Semaphore
+):
+    last_block = 0
+    while True:
+        try:
+            block_data = await chain.get_block(
+                session,
+                sem
+            )
+            if block_data is not None:
+                current_block = int(block_data["block"]["header"]["height"])
+                print(f"current block - {current_block}")
+                chain_id = block_data["block"]["header"]["chain_id"]
+                if last_block >= current_block:
+                    await asyncio.sleep(1)
+                else:
+                    last_block = current_block
+                    if await process_block(
+                        chain=chain,
+                        height=current_block,
+                        pool=pool,
+                        session=session,
+                        sem=sem,
+                        block_data=block_data,
+                    ):
+                        print(f"processed live block - {current_block}")
+                    else:
+                        # should we save this to db?
+                        print(f"failed to process block - {current_block}")
+                    
+                    txs_data = await chain.get_block_txs(session, sem, current_block)
+                    
+                
+                    if txs_data:
+                        
+                        txs_data = txs_data['tx_responses']
+                        await upsert_raw_txs(pool, {current_block: txs_data}, chain_id)
+                        print(f"processed live txs {current_block}")
+                    else:
+                        # should we save this to db?
+                        print(f"failed to get txs for block - {current_block}")
+            else:
+                print(f"block_data is None")
+                # save error to db
 
-#             # upsert block data to db
-#             # chain_id, current_height, json.dump(res)
 
-#         except Exception as e:
-#             print(
-#                 f"live - Failed to get a block from {chain.apis[chain.current_api_index]} - {repr(e)}"
-#             )
-#             chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
-#     print("backfill complete")
+        except Exception as e:
+            print(
+                f"live - Failed to get a block from {chain.apis[chain.current_api_index]} - {repr(e)}"
+            )
+            chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
+            
+    print("live complete")
 
 async def backfill_block(height, chain, pool, session, sem):
     if not (await process_block(chain=chain, height=height, pool=pool, session=session, sem=sem)):
@@ -114,74 +132,74 @@ async def backfill_blocks(
             print(f"blocks inserted: {min(heights)} - {max(heights)}")
             tasks = []
 
-async def process_txs(min_height, max_height, chain, pool, session, sem):
-    txs_data = await chain.get_batch_txs(session, sem, min_height, max_height)
-    if txs_data is None:
-        print(f"txs_data is None")
-        return False
-    try:
-        txs = txs_data['tx_responses']
-        txs_by_height = defaultdict(list)
-        print(len(txs))
-        [txs_by_height[int(tx['height'])].append(tx) for tx in txs]
-        max_queried_height = max(txs_by_height.keys())
-        every_height = {height: txs_by_height[height] if height in txs_by_height else [] for height in range(min_height, max_queried_height + 1)}
-        await upsert_raw_txs(pool, every_height, 'secret-4')
-        return max_queried_height
-    except Exception as e:
-        print(f"upsert_txs error {repr(e)} - {min_height} - {max_height}")
-        traceback.print_exc()
+async def process_batch_txs(min_height: int, max_height: int, chain: CosmosChain, pool: asyncpg.Pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore) -> bool: 
+    """Insert the section of transactions between `min_height` and `max_height` into the database."""
+    current_max = min_height
+    print(f"processing txs {min_height} - {max_height}")
+    while current_max < max_height:
+        txs_data = await chain.get_batch_txs(session, sem, min_height, max_height)
+        if txs_data is None:
+            print(f"txs_data is None")
+        try:
+            txs = txs_data['tx_responses']
+            txs_by_height = defaultdict(list)
 
-async def backfill_tx_range(min_height: int, max_height: int, chain: CosmosChain, pool: asyncpg.pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore):
-    max_queried_height = await process_txs(min_height, max_height, chain, pool, session, sem)
-    if max_queried_height is None:
-        # log error
-        print(f"failed to backfill txs from {min_height} to {max_height}")
-        return min_height
-    else:
-        return max_queried_height
+            [txs_by_height[int(tx['height'])].append(tx) for tx in txs]
+            max_queried_height = max(txs_by_height.keys())
+            every_height = {height: txs_by_height[height] if height in txs_by_height else [] for height in range(min_height, max_queried_height + 1)}
+            # todo: chain id
+            await upsert_raw_txs(pool, every_height, chain.chain_id)
+            print(f"upserted txs {min_height} - {max_queried_height}")
+            current_max = max_queried_height
+        except Exception as e:
+            print(f"upsert_txs error {repr(e)} - {min_height} - {max_height}")
+            print("trying again...")
+            traceback.print_exc()
 
-async def backfill_txs(
+
+async def check_missing_txs(
     chain: CosmosChain, pool: asyncpg.pool, session: aiohttp.ClientSession,
     sem: asyncio.Semaphore
 ):
     tasks = []
-    tx_step = 1000
-    # todo: implement proper backfilling of txs like in blocks
+    section_size = 1000
     while True:
-        print("getting block txs")
-        block_data = await chain.get_block(session, sem)
-        current_height = int(block_data["block"]["header"]["height"])
-        chain_id = block_data["block"]["header"]["chain_id"]
-        async with pool.acquire() as conn:
-            max_height_db = await conn.fetchrow(
-                "SELECT MAX(height) FROM txs"
-            )
-            min_height = max_height_db[0] if max_height_db[0] is not None else chain.min_block_height
-        print(f"{min_height}")
-        next_height = min_height
-        while next_height < current_height:
-            # print(f"backfilling txs from {height} to {height + tx_step}")
-            next_height = await backfill_tx_range(next_height, next_height + tx_step, chain, pool, session, sem)
-            # if len(tasks) >= 100:
-            #     await asyncio.gather(*tasks)
-            #     tasks = []
+        # print("getting block txs")
+        missing_txs_to_query = await get_missing_txs(pool, chain)
+        print(f"{missing_txs_to_query=}")
+        for min_height_in_db, max_height_in_db in missing_txs_to_query:
+            
+            # if we are missing tons of txs, we should split it up into smaller sections
+            if max_height_in_db - min_height_in_db > section_size:
+                tasks = []
+                for new_min in range(min_height_in_db, max_height_in_db, section_size):
+                    print(f"adding task {new_min} to {new_min + section_size}")
+                    # await process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)
+                    tasks.append(asyncio.create_task(process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)))
+                    if len(tasks) >= 5:
+                        print("gather tasks")
+                        try: 
+                            await asyncio.gather(*tasks)
+                        except Exception as e:
+                            print("error in batch task gather")
+                            traceback.print_exc()
+                        tasks = []
+            else:
+                await process_batch_txs(min_height_in_db, max_height_in_db, chain, pool, session, sem)
+        await asyncio.sleep(1)
+        
+
+async def backfill_txs():
+    pass
 
 msg_cols, log_cols = None, None
 
+async def on_request_start(session, context, params):
+    logging.getLogger('aiohttp.client').debug(f'Starting request <{params}>')
+
 async def main():
-    print(os.getenv("APIS").split(","))
-    print(os.getenv("TXS_ENDPOINT"))
 
-    chain = CosmosChain(
-        # chain_isd=os.getenv("CHAIN_ID"),
-        min_block_height=int(os.getenv("MIN_BLOCK_HEIGHT")),
-        blocks_endpoint=os.getenv("BLOCKS_ENDPOINT"),
-        txs_endpoint=os.getenv("TXS_ENDPOINT"),
-        txs_batch_endpoint=os.getenv("TXS_BATCH_ENDPOINT"),
-        apis=os.getenv("APIS").split(","),
-    )
-
+    
     async with asyncpg.create_pool(
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT"),
@@ -257,24 +275,36 @@ async def main():
             )
         )
         
-        sem = asyncio.Semaphore(1000)
+        sem = asyncio.Semaphore(100)
+        
+        logging.basicConfig(level=logging.DEBUG)
+        trace_config = aiohttp.TraceConfig()
+        trace_config.on_request_start.append(on_request_start)
     
-        async with aiohttp.ClientSession() as session:
-            block_data = await chain.get_block(session, sem)
-            chain_id = block_data["block"]["header"]["chain_id"]
-            print(f"chain_id: {chain_id} {block_data['block']['header']['height']}")
+        async with aiohttp.ClientSession(trace_configs=[trace_config]) as session:
 
-            res = await asyncio.gather(
+            chain = CosmosChain(
+                chain_id='jackal-1',
+                min_block_height=int(os.getenv("MIN_BLOCK_HEIGHT")),
+                blocks_endpoint=os.getenv("BLOCKS_ENDPOINT"),
+                txs_endpoint=os.getenv("TXS_ENDPOINT"),
+                txs_batch_endpoint=os.getenv("TXS_BATCH_ENDPOINT"),
+                apis=os.getenv("APIS").split(","),
+            )
+            
+            tasks = [
                 listener.run(
                     {"txs_to_logs": handle_tx_notifications},
                     policy=asyncpg_listen.ListenPolicy.ALL,
                 ),                
                 # backfill_blocks(chain, pool, session, sem),
-                backfill_txs(chain, pool, session, sem)
-                # get_live_chain_data(chain, pool, session, sem),
+                check_missing_txs(chain, pool, session, sem),
+                get_live_chain_data(chain, pool, session, sem),
+            ]
+            
+            await asyncio.gather(
+                *tasks
             )
-            for i in res:
-                print(i)
 
 if __name__ == "__main__":
     asyncio.run(main())

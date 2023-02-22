@@ -10,6 +10,7 @@ import aiohttp
 @dataclass
 class CosmosChain:
     min_block_height: int
+    chain_id: str
     blocks_endpoint: str
     txs_endpoint: str
     txs_batch_endpoint: str
@@ -40,7 +41,7 @@ class CosmosChain:
             retries += 1
         return None
 
-    async def get_txs(
+    async def get_block_txs(
         self,
         session: aiohttp.ClientSession,
         sem: asyncio.Semaphore,
