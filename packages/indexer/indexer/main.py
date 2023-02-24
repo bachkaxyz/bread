@@ -1,4 +1,5 @@
 import asyncio, aiohttp, json, asyncpg, os
+import time
 import logging
 from collections import defaultdict
 import traceback
@@ -36,16 +37,6 @@ async def process_block(
     if block_data is None:
         # this is because block data might be passed in from the live chain data (so removing a rerequest)
         block_data = await chain.get_block(session, sem, height)
-
-    # # need to come back to this
-    # num_txs = len(block_data['block']['data']['txs'])
-    # if num_txs != 0:
-    #     txs_data = await chain.get_txs(session, sem, height)
-    # else: 
-    #     txs_data = None
-    # if (txs_data is None and num_txs != 0) or block_data is None:
-    #     print(f"{'tx_data' if txs_data is None else 'block_data'} is None")
-    #     return False
     try:
         await upsert_raw_blocks(pool, block_data)
         return True
@@ -124,9 +115,10 @@ async def backfill_blocks(
     sem: asyncio.Semaphore
 ):
     tasks = []
+    batch_size = 100
     async for height in get_missing_blocks(pool, session, sem, chain):
         tasks.append(asyncio.ensure_future(backfill_block(height, chain, pool, session, sem)))
-        if len(tasks) >= 100:
+        if len(tasks) >= batch_size:
             heights = await asyncio.gather(*tasks)
             print(f"blocks inserted: {min(heights)} - {max(heights)}")
             tasks = []
@@ -188,7 +180,8 @@ async def check_missing_txs(
 ):
     tasks = []
     section_size = 1000
-    batch_size = 20 # process 20 blocks at a time
+    batch_size = 100 # process x blocks at a time with async tasks
+    start_time = time.time()
     while True:
         # print("getting block txs")
         missing_txs_to_query = await get_missing_txs(pool, chain)
@@ -220,6 +213,7 @@ async def check_missing_txs(
                 ]
                 await asyncio.gather(*tasks)
                 with open(f"indexer/api_hit_miss_log.txt", "w") as f:
+                    f.write(f'start time: {start_time} current time: {time.time()} elapsed: {time.time() - start_time}\n')
                     for i in range(len(chain.apis)):
                         f.write(f"{chain.apis[i]} - hit: {chain.apis_hit[i]} miss: {chain.apis_miss[i]}\n")
         await asyncio.sleep(1)
