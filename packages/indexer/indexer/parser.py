@@ -3,6 +3,8 @@ import json
 import time
 from typing import List, Tuple
 from base64 import b64decode, b64encode
+
+
 @dataclass
 class Log:
     txhash: str
@@ -10,22 +12,23 @@ class Log:
     failed: bool = False
     msg_index: int = 0
     event_attributes = {}
-    
+
     def get_cols(self):
         return set(self.event_attributes.keys())
-    
-        
+
     def fix_entries(self):
-        self.event_attributes = {(fix_entry(k[0]), fix_entry(k[1])): fix_entry(v) for k, v in self.event_attributes.items()}
-    
+        self.event_attributes = {
+            (fix_entry(k[0]), fix_entry(k[1])): fix_entry(v)
+            for k, v in self.event_attributes.items()
+        }
+
     def dump(self):
         final = {}
         for k, v in self.event_attributes.items():
             event, attr = k
-            final[f'{event}_{attr}'] = v
+            final[f"{event}_{attr}"] = v
         return json.dumps(final)
 
-    
 
 def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
     logs: List[Log] = []
@@ -34,7 +37,7 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
     except:
         return [Log(txhash, failed=True, failed_msg=raw_logs)]
 
-    for msg_index, raw_log in enumerate(raw_logs): # for each message
+    for msg_index, raw_log in enumerate(raw_logs):  # for each message
         log = Log(txhash=txhash, msg_index=msg_index)
         # for each event in the message
         for i, event in enumerate(raw_log["events"]):
@@ -67,7 +70,7 @@ def parse_log_event(event: dict):
             #     print(b64decode(attr["key"]))
             # except:
             #     print(attr["key"])
-            log_dic[(type, attr['key'])] = (
+            log_dic[(type, attr["key"])] = (
                 attr["value"] if "value" in attr.keys() else ""
             )
             # packet_payloads.append(str({type + "|" + attr["key"]: attr["value"]}))

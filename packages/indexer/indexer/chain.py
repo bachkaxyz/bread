@@ -1,11 +1,7 @@
-from ast import Tuple
-import asyncio
+import asyncio, json, traceback, aiohttp
 from dataclasses import dataclass, field
-import json
-import traceback
-from typing import Dict, List
+from typing import List
 
-import aiohttp
 
 @dataclass
 class CosmosChain:
@@ -15,7 +11,7 @@ class CosmosChain:
     txs_endpoint: str
     txs_batch_endpoint: str
     apis: List[str] = field(default_factory=list)
-    apis_hit: List[int] = field(default_factory=list)    
+    apis_hit: List[int] = field(default_factory=list)
     apis_miss: List[int] = field(default_factory=list)
     current_api_index: int = 0
 
@@ -62,16 +58,14 @@ class CosmosChain:
                     ) as resp:
                         self.apis_hit[self.current_api_index] += 1
                         res = json.loads(await resp.read())
-                        if list(res.keys()) != ['code', 'message', 'details']:
+                        if list(res.keys()) != ["code", "message", "details"]:
                             return res
             except Exception as e:
                 self.apis_miss[self.current_api_index] += 1
                 self.current_api_index = (self.current_api_index + 1) % len(self.apis)
                 # save error to db
             retries += 1
-        print(
-                    f"failed to get block {height} from {self.apis[self.current_api_index]}"
-                )
+        print(f"failed to get block {height} from {self.apis[self.current_api_index]}")
         return None
 
     async def get_batch_txs(
@@ -91,38 +85,15 @@ class CosmosChain:
                     if resp.status == 200:
                         self.apis_hit[self.current_api_index] += 1
                         return json.loads(await resp.read())
-                    print(f"{resp.status} {self.apis[self.current_api_index]}{self.txs_batch_endpoint.format(min_height, max_height)} {(await resp.read())}"
- )
+                    print(
+                        f"{resp.status} {self.apis[self.current_api_index]}{self.txs_batch_endpoint.format(min_height, max_height)} {(await resp.read())}"
+                    )
             except Exception as e:
                 self.apis_miss[self.current_api_index] += 1
                 self.current_api_index = (self.current_api_index + 1) % len(self.apis)
                 print(traceback.format_exc())
                 # save error to db
             retries += 1
-            
+
         print(f"failed to get batch txs from {self.apis[self.current_api_index]}")
         return None
-
-# chain_mapping: List[CosmosChain] = [
-#     CosmosChain(
-#         chain_id="secret-4",
-#         min_block_height=7284419,
-#         apis=[
-#             "https://secret-4.api.trivium.network:1317",
-#         ],
-#     ),
-# CosmosChain(
-#     chain_id="jackal-1",
-#     min_block_height=1,
-#     apis=[
-#         CosmosAPI(url="https://api.jackalprotocol.com"),
-#         CosmosAPI(url="https://jackal-api.polkachu.com"),
-#         CosmosAPI(url=" https://api.jackal.nodestake.top"),
-#     ],
-# ),
-# CosmosChain(
-#     chain_id="akashnet-2",
-#     min_block_height=9262196,
-#     apis=[CosmosAPI(url="https://akash-api.polkachu.com")],
-# ),
-# ]

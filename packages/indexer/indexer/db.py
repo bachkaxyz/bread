@@ -49,7 +49,7 @@ async def create_tables(pool: asyncpg.pool):
         file_path = os.path.join(cur_dir, "sql/parse_raw.sql")
         with open(file_path, "r") as f:
             await conn.execute(f.read())
-            
+
         file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
         with open(file_path, "r") as f:
             await conn.execute(f.read())
@@ -71,6 +71,7 @@ async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
             json.dumps(block),
         )
 
+
 async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_id: str):
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -86,8 +87,12 @@ async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_i
                     json.dumps(tx) if len(tx) > 0 else None,
                 )
 
+
 async def get_missing_blocks(
-    pool: asyncpg.pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore, chain: CosmosChain
+    pool: asyncpg.pool,
+    session: aiohttp.ClientSession,
+    sem: asyncio.Semaphore,
+    chain: CosmosChain,
 ):
     while True:
         block_data = await chain.get_block(session, sem)
@@ -115,15 +120,6 @@ async def get_missing_blocks(
                     for i in range(height - dif, height):
                         yield i
 
-async def add_columns(pool: asyncpg.pool, table_name: str, new_cols: List[str]):
-    async with pool.acquire() as conn:
-        alter_table = f"""
-            ALTER TABLE {table_name}
-            {
-                ", ".join([f"ADD COLUMN IF NOT EXISTS {col} TEXT" for col in new_cols])
-            }
-        """
-        await conn.execute(alter_table)
 
 async def add_current_log_columns(pool: asyncpg.pool, new_cols: List[tuple[str, str]]):
     async with pool.acquire() as conn:
@@ -135,10 +131,11 @@ async def add_current_log_columns(pool: asyncpg.pool, new_cols: List[tuple[str, 
                     VALUES ($1, $2)
                     ON CONFLICT DO NOTHING
                     """,
-                    row[0], row[1]
+                    row[0],
+                    row[1],
                 )
-                
-                
+
+
 async def add_logs(pool: asyncpg.pool, logs: List[Log]):
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -156,29 +153,7 @@ async def add_logs(pool: asyncpg.pool, logs: List[Log]):
                     log.failed,
                     str(log.failed_msg) if log.failed_msg else None,
                 )
-    
-        
-        
-async def insert_dict(pool: asyncpg.pool, table_name: str, data: List[dict]) -> bool:
-    """
-    Insert a list of dicts into a table with keys as columns and values as values
-    """
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for row in data:
-                keys = ",".join(row.keys())
-                values = "'" + "','".join(str(i) for i in row.values()) + "'"
-                try:
-                    await conn.execute(
-                        f"""
-                        INSERT INTO {table_name} ({keys})
-                        VALUES ({values})
-                        """
-                    )
-                except asyncpg.PostgresSyntaxError as e:
-                    print(table_name, traceback.format_exc())
-                    return False
-    return True
+
 
 async def get_missing_txs(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
     """
@@ -186,39 +161,35 @@ async def get_missing_txs(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
     Returns a list of tuples of (start_height, end_height) INCLUSIVE
     """
     async with pool.acquire() as conn:
-        rows = await conn.fetch("""
+        rows = await conn.fetch(
+            """
                 select height, difference_per_block from (
                     select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
                     from raw_txs
                     where chain_id = $1
                 ) as dif
                 where difference_per_block <> 1
-        """, chain.chain_id)
-        
+        """,
+            chain.chain_id,
+        )
+
         # the above query returns the difference between the two blocks that exists
-        
+
         # so if we have height=7285179 and height=7285186 then the difference is 7
         # but we really are missing the blocks between 7285179 and 7285186
-        
+
         # so we add 1 to the bottom and subtract 1 from the top to get the range of blocks we need to query
-        
+
         # this query returns the difference between the current block and the previous block, if there is no previous block it returns -1
         # if dif == -1 and  if min_block_height == height and remove that row, otherwise return that number and min_block_height
         updated_rows = []
         for height, dif in rows:
             if dif != -1:
-                updated_rows.append(((height - dif ) + 1, height - 1))
+                updated_rows.append(((height - dif) + 1, height - 1))
             else:
                 if height == chain.min_block_height:
                     continue
                 else:
                     updated_rows.append((chain.min_block_height, height - 1))
-                
+
         return updated_rows
-    
-async def check_backfill(pool, chain_id) -> bool:
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("""
-            select max(height) from raw_blocks where chain_id = $1
-        """, chain_id)
-        return False if row[0] else True
