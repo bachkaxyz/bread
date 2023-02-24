@@ -47,11 +47,6 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
         logs.append(log)
     return logs
 
-
-types = set()
-packet_payloads = []
-
-
 def parse_log_event(event: dict):
     log_dic = {}
     type = event["type"]
@@ -66,15 +61,9 @@ def parse_log_event(event: dict):
                 pass
     else:
         for attr in event["attributes"]:
-            # try:
-            #     print(b64decode(attr["key"]))
-            # except:
-            #     print(attr["key"])
             log_dic[(type, attr["key"])] = (
                 attr["value"] if "value" in attr.keys() else ""
             )
-            # packet_payloads.append(str({type + "|" + attr["key"]: attr["value"]}))
-    # types.add(json.dumps({type: list(log_cols)}))
     return log_dic
 
 
@@ -110,31 +99,3 @@ def parse_messages(messages: dict, txhash: str):
         msg_cols.update(msg_dic.keys())
         msgs.append(msg_dic)
     return msgs, msg_cols
-
-
-# with open("indexer/test_data.csv", "r") as f:
-#     df = pd.read_csv(f)
-
-# l_msg = []
-# l_log = []
-# for i, row in df.iterrows():
-#     # print(row[0])
-#     tx = json.loads(row["tx"])
-#     logs = row["raw_log"]
-#     msgs, msg_cols = parse_messages(tx["body"]["messages"], "txhash")
-#     logs, log_cols = parse_logs(logs, "txhash")
-#     l_msg.extend(msgs)
-#     l_log.extend(logs)
-# msg_df = pd.DataFrame(l_msg)
-# msg_df.to_csv("indexer/msg_data_parsed.csv")
-# log_df = pd.DataFrame(l_log)
-# log_df.to_csv("indexer/log_data_parsed.csv")
-
-
-# types = list(types)
-# types.sort()
-# with open("indexer/types.txt", "w") as f:
-#     f.write("\n".join(types))
-# packet_payloads.sort()
-# with open("indexer/packet_payloads.txt", "w") as f:
-#     f.write("\n".join(packet_payloads))
