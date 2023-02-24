@@ -71,7 +71,6 @@ async def get_live_chain_data(
             if block_data is not None:
                 current_block = int(block_data["block"]["header"]["height"])
                 print(f"current block - {current_block}")
-                chain_id = block_data["block"]["header"]["chain_id"]
                 if last_block >= current_block:
                     await asyncio.sleep(1)
                 else:
@@ -95,7 +94,7 @@ async def get_live_chain_data(
                     if txs_data:
                         
                         txs_data = txs_data['tx_responses']
-                        await upsert_raw_txs(pool, {current_block: txs_data}, chain_id)
+                        await upsert_raw_txs(pool, {current_block: txs_data}, chain.chain_id)
                         print(f"processed live txs {current_block}")
                     else:
                         # should we save this to db?
@@ -132,7 +131,7 @@ async def backfill_blocks(
             print(f"blocks inserted: {min(heights)} - {max(heights)}")
             tasks = []
 
-async def process_batch_txs(min_height: int, max_height: int, chain: CosmosChain, pool: asyncpg.Pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore) -> bool: 
+async def process_batch_txs(min_height: int, max_height: int, chain: CosmosChain, pool: asyncpg.Pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore): 
     """Insert the section of transactions between `min_height` and `max_height` into the database."""
     current_max = min_height
     print(f"processing txs {min_height} - {max_height}")
@@ -155,6 +154,32 @@ async def process_batch_txs(min_height: int, max_height: int, chain: CosmosChain
             print(f"upsert_txs error {repr(e)} - {min_height} - {max_height}")
             print("trying again...")
             traceback.print_exc()
+            
+async def process_tx(height: int, chain: CosmosChain, pool: asyncpg.Pool, session: aiohttp.ClientSession, sem: asyncio.Semaphore): 
+    print(f"processing tx {height}")
+    txs_data = await chain.get_block_txs(session, sem, height)
+    try:                
+        if txs_data is None:
+            print(f"txs_data is None")
+            raise Exception("txs_data is None")
+        else:
+            txs_data = txs_data['tx_responses']
+            await upsert_raw_txs(pool, {height: txs_data}, chain.chain_id)
+                            
+            # txs = txs_data['tx_responses']
+            # txs_by_height = defaultdict(list)
+
+            # [txs_by_height[int(tx['height'])].append(tx) for tx in txs]
+            # max_queried_height = max(txs_by_height.keys())
+            # every_height = {height: txs_by_height[height] if height in txs_by_height else [] for height in range(min_height, max_queried_height + 1)}
+
+            # await upsert_raw_txs(pool, , chain.chain_id)
+            print(f"upserted tx {height}")
+            # current_max = max_queried_height
+    except Exception as e:
+        print(f"upsert_txs error {repr(e)} - {height}")
+        print(f"trying again... {txs_data}")
+        traceback.print_exc()
 
 
 async def check_missing_txs(
@@ -163,29 +188,40 @@ async def check_missing_txs(
 ):
     tasks = []
     section_size = 1000
+    batch_size = 20 # process 20 blocks at a time
     while True:
         # print("getting block txs")
         missing_txs_to_query = await get_missing_txs(pool, chain)
-        print(f"{missing_txs_to_query=}")
+        print(f"# of missing txs: {len(missing_txs_to_query)}")
         for min_height_in_db, max_height_in_db in missing_txs_to_query:
             
             # if we are missing tons of txs, we should split it up into smaller sections
-            if max_height_in_db - min_height_in_db > section_size:
-                tasks = []
-                for new_min in range(min_height_in_db, max_height_in_db, section_size):
-                    print(f"adding task {new_min} to {new_min + section_size}")
-                    # await process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)
-                    tasks.append(asyncio.create_task(process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)))
-                    if len(tasks) >= 5:
-                        print("gather tasks")
-                        try: 
-                            await asyncio.gather(*tasks)
-                        except Exception as e:
-                            print("error in batch task gather")
-                            traceback.print_exc()
-                        tasks = []
-            else:
-                await process_batch_txs(min_height_in_db, max_height_in_db, chain, pool, session, sem)
+            # if max_height_in_db - min_height_in_db > section_size:
+                # tasks = []
+                # for new_min in range(min_height_in_db, max_height_in_db, section_size):
+                #     print(f"adding task {new_min} to {new_min + section_size}")
+                #     # await process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)
+                #     tasks.append(asyncio.create_task(process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)))
+                #     if len(tasks) >= 5:
+                #         print("gather tasks")
+                #         try: 
+                #             await asyncio.gather(*tasks)
+                #         except Exception as e:
+                #             print("error in batch task gather")
+                #             traceback.print_exc()
+                #         tasks = []
+            # else:
+            #     await process_batch_txs(min_height_in_db, max_height_in_db, chain, pool, session, sem)
+            tasks = []
+            for new_min in range(min_height_in_db, max_height_in_db, batch_size):
+                tasks = [
+                    process_tx(h, chain, pool, session, sem)
+                    for h in range(new_min, new_min + batch_size)
+                ]
+                await asyncio.gather(*tasks)
+                with open(f"indexer/api_hit_miss_log.txt", "w") as f:
+                    for i in range(len(chain.apis)):
+                        f.write(f"{chain.apis[i]} - hit: {chain.apis_hit[i]} miss: {chain.apis_miss[i]}\n")
         await asyncio.sleep(1)
         
 
@@ -283,15 +319,22 @@ async def main():
     
         async with aiohttp.ClientSession(trace_configs=[trace_config]) as session:
 
+            chain = await session.get("https://raw.githubusercontent.com/cosmos/chain-registry/master/secretnetwork/chain.json")
+            chain = json.loads(await chain.read())
+            raw_apis = chain['apis']['rest']
+            apis = [api['address'] for api in raw_apis] + os.getenv("APIS").split(",")
+
             chain = CosmosChain(
-                chain_id='jackal-1',
+                chain_id='secret-4',
                 min_block_height=int(os.getenv("MIN_BLOCK_HEIGHT")),
                 blocks_endpoint=os.getenv("BLOCKS_ENDPOINT"),
                 txs_endpoint=os.getenv("TXS_ENDPOINT"),
                 txs_batch_endpoint=os.getenv("TXS_BATCH_ENDPOINT"),
-                apis=os.getenv("APIS").split(","),
+                apis=apis,
+                apis_hit=[0 for i in range(len(apis))],
+                apis_miss=[0 for i in range(len(apis))]
             )
-            
+            print(f"chain: {chain.chain_id} min height: {chain.min_block_height}")            
             tasks = [
                 listener.run(
                     {"txs_to_logs": handle_tx_notifications},
