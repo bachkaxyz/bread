@@ -1,0 +1,64 @@
+CREATE OR REPLACE FUNCTION on_log_column_change() RETURNS TRIGGER AS
+$$
+    DECLARE
+        column_name TEXT;
+        unparsed_columns JSONB;
+        kv_logs cursor(column_name TEXT) for 
+            select key, value, txhash, msg_index
+            from logs, jsonb_each_text(parsed)
+            where key = column_name;
+    BEGIN
+        column_name := NEW.event || '_' || NEW.attribute;
+        IF NEW.parse = TRUE THEN
+            EXECUTE format(
+                'ALTER TABLE logs ADD COLUMN IF NOT EXISTS %I TEXT',
+                column_name
+            );
+            FOR row IN kv_logs(column_name)
+            LOOP
+                EXECUTE format(
+                    'UPDATE logs SET %I = %L, updated_at=NOW() WHERE txhash = %L AND msg_index = %L',
+                    column_name,
+                    row.value,
+                    row.txhash,
+                    row.msg_index
+                );
+            END LOOP;
+            
+        ELSE
+            EXECUTE format(
+                'ALTER TABLE logs DROP COLUMN IF EXISTS %I',
+                column_name
+            );
+        END IF;
+        RETURN NEW;
+    END
+$$
+LANGUAGE plpgsql;
+CREATE OR REPLACE TRIGGER log_column_change
+AFTER UPDATE
+ON log_columns
+FOR EACH ROW EXECUTE PROCEDURE on_log_column_change();
+
+CREATE OR REPLACE FUNCTION log_insert() RETURNS TRIGGER AS
+$$
+    DECLARE
+        cur_log_columns cursor for 
+            select event || '_' || attribute as column_name
+            from log_columns
+            where parse = TRUE;
+    BEGIN
+        FOR row IN cur_log_columns
+        LOOP
+            EXECUTE 'UPDATE logs SET ' || row.column_name ||' = parsed->>' || quote_literal(row.column_name) || ', updated_at=NOW() WHERE txhash =' || quote_literal(NEW.txhash) || ' AND msg_index =' || quote_literal(NEW.msg_index::TEXt) || ';';
+        END LOOP;
+        RETURN NEW;
+    END
+$$
+LANGUAGE plpgsql;
+CREATE OR REPLACE TRIGGER log_insert
+AFTER INSERT
+on logs
+FOR EACH ROW EXECUTE PROCEDURE log_insert();
+ 
+ 
