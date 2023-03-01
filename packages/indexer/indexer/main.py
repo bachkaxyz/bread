@@ -138,7 +138,6 @@ async def process_tx(
 ):
     print(f"processing tx {height}")
     txs_data = await chain.get_block_txs(session, sem, height)
-    print(txs_data)
     try:
         if txs_data is None:
             print(f"txs_data is None")
