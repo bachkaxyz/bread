@@ -22,6 +22,8 @@ import asyncpg_listen
 
 load_dotenv()
 
+batch_size = int(os.getenv("BATCH_SIZE", 100))
+
 
 async def process_block(
     chain: CosmosChain,
@@ -32,7 +34,7 @@ async def process_block(
     block_data: dict = None,
 ) -> bool:
     if block_data is None:
-        # this is because block data might be passed in from the live chain data (so removing a rerequest)
+        # this is because block data might be passed in from the live chain data (so removing a duplicated request)
         block_data = await chain.get_block(session, sem, height)
     try:
         await upsert_raw_blocks(pool, block_data)
@@ -144,7 +146,7 @@ async def process_tx(
             txs_data = txs_data["tx_responses"]
             await upsert_raw_txs(pool, {height: txs_data}, chain.chain_id)
 
-            print(f"upserted tx {height}")
+            print(f"upserting tx {height}")
     except Exception as e:
         print(f"upsert_txs error {repr(e)} - {height}")
         print(f"trying again... {txs_data}")
@@ -159,31 +161,12 @@ async def check_missing_txs(
 ):
     tasks = []
     section_size = 1000
-    batch_size = 100  # process x blocks at a time with async tasks
     start_time = time.time()
     while True:
         # print("getting block txs")
         missing_txs_to_query = await get_missing_txs(pool, chain)
-        print(f"# of missing txs: {len(missing_txs_to_query)}")
+        print(f"missing txs: {missing_txs_to_query}")
         for min_height_in_db, max_height_in_db in missing_txs_to_query:
-
-            # if we are missing tons of txs, we should split it up into smaller sections
-            # if max_height_in_db - min_height_in_db > section_size:
-            # tasks = []
-            # for new_min in range(min_height_in_db, max_height_in_db, section_size):
-            #     print(f"adding task {new_min} to {new_min + section_size}")
-            #     # await process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)
-            #     tasks.append(asyncio.create_task(process_batch_txs(new_min, new_min + section_size, chain, pool, session, sem)))
-            #     if len(tasks) >= 5:
-            #         print("gather tasks")
-            #         try:
-            #             await asyncio.gather(*tasks)
-            #         except Exception as e:
-            #             print("error in batch task gather")
-            #             traceback.print_exc()
-            #         tasks = []
-            # else:
-            #     await process_batch_txs(min_height_in_db, max_height_in_db, chain, pool, session, sem)
             tasks = []
             for new_min in range(min_height_in_db, max_height_in_db, batch_size):
                 tasks = [
@@ -242,7 +225,6 @@ async def main():
             payload = notification.payload
             print(f"New tx: {payload}")
             txhash, chain_id = payload.split(" ")
-            # print(f"New tx: {txhash} - {chain_id}")
             async with pool.acquire() as conn:
                 data = await conn.fetchrow(
                     "SELECT raw_log, tx FROM txs WHERE chain_id = $1 AND txhash = $2",
@@ -272,23 +254,20 @@ async def main():
             )
         )
 
-        sem = asyncio.Semaphore(100)
+        sem = asyncio.Semaphore(100)  # 100 concurrent request
 
-        logging.basicConfig(level=logging.DEBUG)
-        trace_config = aiohttp.TraceConfig()
-        trace_config.on_request_start.append(on_request_start)
-
-        async with aiohttp.ClientSession(trace_configs=[trace_config]) as session:
-
-            chain = await session.get(
-                "https://raw.githubusercontent.com/cosmos/chain-registry/master/secretnetwork/chain.json"
-            )
-            chain = json.loads(await chain.read())
-            raw_apis = chain["apis"]["rest"]
+        async with aiohttp.ClientSession(trace_configs=[]) as session:
+            chain_name = os.getenv("CHAIN_NAME")
+            if chain_name:
+                raw_chain = await session.get(
+                    f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_name}/chain.json"
+                )
+            raw_chain = json.loads(await raw_chain.read())
+            raw_apis = raw_chain["apis"]["rest"]
             apis = [api["address"] for api in raw_apis] + os.getenv("APIS").split(",")
 
             chain = CosmosChain(
-                chain_id="secret-4",
+                chain_id=raw_chain["chain_id"],
                 min_block_height=int(os.getenv("MIN_BLOCK_HEIGHT")),
                 blocks_endpoint=os.getenv("BLOCKS_ENDPOINT"),
                 txs_endpoint=os.getenv("TXS_ENDPOINT"),

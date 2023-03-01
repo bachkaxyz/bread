@@ -32,7 +32,6 @@ class CosmosChain:
                         self.apis_hit[self.current_api_index] += 1
                         return await resp.json()
             except Exception as e:
-                # print(e.__traceback__.tb_lineno, e)
                 print(
                     f"failed to get block {height} from {self.apis[self.current_api_index]}"
                 )
