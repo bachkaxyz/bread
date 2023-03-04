@@ -59,7 +59,7 @@ async def test_api_get_wrong_status(mock_semaphore, mock_client, mock_chain):
     )
 
     async with aiohttp.ClientSession() as session:
-        result = await mock_chain.get_block(session, mock_semaphore)
+        result = await mock_chain.get_block_txs(session, mock_semaphore, 1)
         assert None == result
 
 
@@ -67,6 +67,21 @@ async def test_api_get_wrong_status(mock_semaphore, mock_client, mock_chain):
 async def test_api_get_invalid_keys(mock_semaphore, mock_client, mock_chain):
 
     exp_res = {"code": 500, "message": "mock_response", "details": "mock_details"}
+
+    mock_client.get.return_value.__aenter__.return_value.status = 500
+    mock_client.get.return_value.__aenter__.return_value.read.return_value = json.dumps(
+        exp_res
+    )
+
+    async with aiohttp.ClientSession() as session:
+        result = await mock_chain.get_batch_txs(session, mock_semaphore, 0, 100)
+        assert None == result
+
+
+@pytest.mark.asyncio
+async def test_api_get_invalid_json(mock_semaphore, mock_client, mock_chain):
+
+    exp_res = "invalid_json"
 
     mock_client.get.return_value.__aenter__.return_value.status = 500
     mock_client.get.return_value.__aenter__.return_value.read.return_value = json.dumps(
