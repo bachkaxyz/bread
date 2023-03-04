@@ -45,7 +45,6 @@ class CosmosChain:
                     ) as resp:
                         if await self.is_valid_response(resp):
                             self.apis_hit[self.current_api_index] += 1
-                            print(resp)
                             return await self.get_json(resp)
                         else:
                             raise Exception("API Response Not Valid")
