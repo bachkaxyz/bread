@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass
 import json
 import time
@@ -11,7 +12,7 @@ class Log:
     failed_msg: str = None
     failed: bool = False
     msg_index: int = 0
-    event_attributes = {}
+    event_attributes = defaultdict(list)
 
     def get_cols(self):
         return set(self.event_attributes.keys())
@@ -47,23 +48,24 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
         logs.append(log)
     return logs
 
+
 def parse_log_event(event: dict):
-    log_dic = {}
+    log_dic = defaultdict(list)
     type = event["type"]
     if type == "wasm":
         for a in event["attributes"]:
             key = a["key"]
             if key == "contract_address":
                 value = a["value"] if "value" in a.keys() else None
-                wasm_dict = {("wasm", key): value}
-                log_dic.update(wasm_dict)
+                log_dic[(type, key)].append(value)
             else:
                 pass
     else:
         for attr in event["attributes"]:
-            log_dic[(type, attr["key"])] = (
-                attr["value"] if "value" in attr.keys() else ""
-            )
+            if "key" in attr.keys():
+                log_dic[(type, attr["key"])].append(
+                    (attr["value"] if "value" in attr.keys() else "")
+                )
     return log_dic
 
 
@@ -71,31 +73,31 @@ def fix_entry(s: any) -> str:
     return str(s).replace(".", "_").replace("/", "_").replace("-", "_").replace("@", "")
 
 
-def flatten_msg(msg: dict):
-    updated_msg = {}
-    for k, v in msg.items():
-        if k == "commit":  # this is a reserved word in postgres
-            k = "_commit"
-        if isinstance(v, dict):
-            updated_sub_msg = flatten_msg(v)
-            for k1, v1 in updated_sub_msg.items():
-                updated_msg[f"{k}_{k1}"] = v1
-        elif isinstance(v, list):
-            updated_msg[k] = json.dumps(v)
-        else:
-            updated_msg[k] = str(v)
-    return updated_msg
+# def flatten_msg(msg: dict):
+#     updated_msg = {}
+#     for k, v in msg.items():
+#         if k == "commit":  # this is a reserved word in postgres
+#             k = "_commit"
+#         if isinstance(v, dict):
+#             updated_sub_msg = flatten_msg(v)
+#             for k1, v1 in updated_sub_msg.items():
+#                 updated_msg[f"{k}_{k1}"] = v1
+#         elif isinstance(v, list):
+#             updated_msg[k] = json.dumps(v)
+#         else:
+#             updated_msg[k] = str(v)
+#     return updated_msg
 
 
-def parse_messages(messages: dict, txhash: str):
-    msgs = []
-    msg_cols = set()
-    for msg_index, msg in enumerate(messages):
-        msg_dic = flatten_msg(msg)
+# def parse_messages(messages: dict, txhash: str):
+#     msgs = []
+#     msg_cols = set()
+#     for msg_index, msg in enumerate(messages):
+#         msg_dic = flatten_msg(msg)
 
-        msg_dic = {fix_entry(k): fix_entry(v) for k, v in msg_dic.items()}
-        msg_dic["txhash"] = txhash
-        msg_dic["msg_index"] = msg_index
-        msg_cols.update(msg_dic.keys())
-        msgs.append(msg_dic)
-    return msgs, msg_cols
+#         msg_dic = {fix_entry(k): fix_entry(v) for k, v in msg_dic.items()}
+#         msg_dic["txhash"] = txhash
+#         msg_dic["msg_index"] = msg_index
+#         msg_cols.update(msg_dic.keys())
+#         msgs.append(msg_dic)
+#     return msgs, msg_cols
