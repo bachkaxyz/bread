@@ -68,17 +68,16 @@ def test_parse_tx_logs():
     logs = parse_logs(json.dumps(raw_log), "test_txhash")
     assert [log.event_attributes for log in logs] == [
         {
-            ("message", "action"): "['_secret_compute_v1beta1_MsgExecuteContract']",
-            ("message", "module"): "['compute']",
-            ("message", "sender"): "['secret1rjml9f6ma7rwgqq9ud8e0aw2arhhj4v4hhzc4k']",
-            (
-                "message",
-                "contract_address",
-            ): "['secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898']",
-            (
-                "wasm",
-                "contract_address",
-            ): "['secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898', 'secret1rgm2m5t530tdzyd99775n6vzumxa5luxcllml4']",
+            ("message", "action"): ["_secret_compute_v1beta1_MsgExecuteContract"],
+            ("message", "module"): ["compute"],
+            ("message", "sender"): ["secret1rjml9f6ma7rwgqq9ud8e0aw2arhhj4v4hhzc4k"],
+            ("message", "contract_address"): [
+                "secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898"
+            ],
+            ("wasm", "contract_address"): [
+                "secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898",
+                "secret1rgm2m5t530tdzyd99775n6vzumxa5luxcllml4",
+            ],
         }
     ]
 
@@ -93,7 +92,7 @@ def test_parse_tx_logs():
     ]
 
     assert [log.dump() for log in logs] == [
-        '{"message_action": "[\'_secret_compute_v1beta1_MsgExecuteContract\']", "message_module": "[\'compute\']", "message_sender": "[\'secret1rjml9f6ma7rwgqq9ud8e0aw2arhhj4v4hhzc4k\']", "message_contract_address": "[\'secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898\']", "wasm_contract_address": "[\'secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898\', \'secret1rgm2m5t530tdzyd99775n6vzumxa5luxcllml4\']"}'
+        '{"message_action": ["_secret_compute_v1beta1_MsgExecuteContract"], "message_module": ["compute"], "message_sender": ["secret1rjml9f6ma7rwgqq9ud8e0aw2arhhj4v4hhzc4k"], "message_contract_address": ["secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898"], "wasm_contract_address": ["secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898", "secret1rgm2m5t530tdzyd99775n6vzumxa5luxcllml4"]}'
     ]
 
 

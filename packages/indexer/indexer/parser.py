@@ -19,15 +19,15 @@ class Log:
 
     def fix_entries(self):
         self.event_attributes = {
-            (fix_entry(k[0]), fix_entry(k[1])): fix_entry(v)
-            for k, v in self.event_attributes.items()
+            (fix_entry(k[0]), fix_entry(k[1])): [fix_entry(v) for v in vs]
+            for k, vs in self.event_attributes.items()
         }
 
     def dump(self):
-        final = {}
+        final = defaultdict(list)
         for k, v in self.event_attributes.items():
             event, attr = k
-            final[f"{event}_{attr}"] = v
+            final[f"{event}_{attr}"].extend(v)
         return json.dumps(final)
 
 
@@ -51,19 +51,19 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
 
 def parse_log_event(event: dict):
     log_dic = defaultdict(list)
-    type = event["type"]
-    if type == "wasm":
+    event_type = event["type"]
+    if event_type == "wasm":
         for a in event["attributes"]:
             key = a["key"]
             if key == "contract_address":
                 value = a["value"] if "value" in a.keys() else None
-                log_dic[(type, key)].append(value)
+                log_dic[(event_type, key)].append(value)
             else:
                 pass
     else:
         for attr in event["attributes"]:
             if "key" in attr.keys():
-                log_dic[(type, attr["key"])].append(
+                log_dic[(event_type, attr["key"])].append(
                     (attr["value"] if "value" in attr.keys() else "")
                 )
     return log_dic

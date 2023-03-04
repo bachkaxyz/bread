@@ -11,7 +11,7 @@ $$
         column_name := NEW.event || '_' || NEW.attribute;
         IF NEW.parse = TRUE THEN
             EXECUTE format(
-                'ALTER TABLE logs ADD COLUMN IF NOT EXISTS %I TEXT',
+                'ALTER TABLE logs ADD COLUMN IF NOT EXISTS %I JSONB DEFAULT NULL',
                 column_name
             );
             FOR row IN kv_logs(column_name)
@@ -50,7 +50,7 @@ $$
     BEGIN
         FOR row IN cur_log_columns
         LOOP
-            EXECUTE 'UPDATE logs SET ' || row.column_name ||' = parsed->>' || quote_literal(row.column_name) || ', updated_at=NOW() WHERE txhash =' || quote_literal(NEW.txhash) || ' AND msg_index =' || quote_literal(NEW.msg_index::TEXt) || ';';
+            EXECUTE 'UPDATE logs SET ' || row.column_name ||' = parsed->' || quote_literal(row.column_name) || ', updated_at=NOW() WHERE txhash =' || quote_literal(NEW.txhash) || ' AND msg_index =' || quote_literal(NEW.msg_index::TEXt) || ';';
         END LOOP;
         RETURN NEW;
     END
@@ -60,5 +60,3 @@ CREATE OR REPLACE TRIGGER log_insert
 AFTER INSERT
 on logs
 FOR EACH ROW EXECUTE PROCEDURE log_insert();
- 
- 

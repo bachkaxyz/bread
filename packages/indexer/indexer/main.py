@@ -1,7 +1,6 @@
 import asyncio, aiohttp, json, asyncpg, os
 import time
 import logging
-from collections import defaultdict
 import traceback
 from typing import List
 from dotenv import load_dotenv
@@ -17,7 +16,7 @@ from indexer.db import (
     upsert_raw_blocks,
     upsert_raw_txs,
 )
-from indexer.parser import Log, parse_logs, parse_messages
+from indexer.parser import Log, parse_logs
 import asyncpg_listen
 
 load_dotenv()
@@ -283,7 +282,7 @@ async def main():
                     policy=asyncpg_listen.ListenPolicy.ALL,
                 ),
                 # backfill_blocks(chain, pool, session, sem),
-                check_missing_txs(chain, pool, session, sem),
+                # check_missing_txs(chain, pool, session, sem),
                 get_live_chain_data(chain, pool, session, sem),
             ]
 
