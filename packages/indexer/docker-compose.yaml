@@ -1,10 +1,10 @@
 version: '3'
-services: 
+services:
   indexer:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
-    image: indexer
+    image: indexer-dev
     container_name: indexer
     env_file:
       - .env
