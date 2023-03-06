@@ -1,5 +1,8 @@
+import asyncio
+from datetime import datetime
+import json
 import os
-from indexer.db import create_tables, drop_tables
+from indexer.db import create_tables, drop_tables, get_table_cols, upsert_raw_blocks
 import pytest
 import asyncpg
 from dotenv import load_dotenv
@@ -18,7 +21,13 @@ async def pool():
     )
 
 
+@pytest.fixture
+def raw_blocks():
+    with open("tests/test_data/raw_blocks.json", "r") as f:
+        return json.load(f)
 
+
+@pytest.mark.asyncio
 async def test_create_drop_tables(pool: asyncpg.pool):
     async def check_tables(pool, table_names, schema) -> int:
         async with pool.acquire() as conn:
@@ -31,15 +40,56 @@ async def test_create_drop_tables(pool: asyncpg.pool):
                 schema,
             )
         return len(results)
-        
+
     await create_tables(pool)
-    
-    table_names = ('raw_blocks', 'raw_txs', 'blocks', 'txs', 'logs', 'log_columns')
-   
+
+    table_names = ("raw_blocks", "raw_txs", "blocks", "txs", "logs", "log_columns")
+
     assert await check_tables(pool, table_names, "public") == len(table_names)
-    
+
+    assert await get_table_cols(pool, "blocks") == [
+        "height",
+        "chain_id",
+        "time",
+        "block_hash",
+        "proposer_address",
+    ]
+
     await drop_tables(pool)
-    
+
     assert await check_tables(pool, table_names, "public") == 0
-    
-    
+
+
+@pytest.mark.asyncio
+async def test_upsert_raw_blocks(pool, raw_blocks):
+    await create_tables(pool)
+    for block in raw_blocks:
+        await upsert_raw_blocks(pool, block)
+
+    async with pool.acquire() as conn:
+        raw_results = await conn.fetch(
+            """
+            select * from raw_blocks
+            """
+        )
+
+        results = await conn.fetch("select * from blocks")
+
+    assert len(raw_results) == len(raw_blocks)
+    assert len(results) == len(raw_blocks)
+
+    for block, res in zip(raw_blocks, raw_results):
+        assert int(res["height"]) == int(block["block"]["header"]["height"])
+        assert res["chain_id"] == block["block"]["header"]["chain_id"]
+
+    for block, res in zip(raw_blocks, results):
+        print(list(res.keys()))
+        assert int(res["height"]) == int(block["block"]["header"]["height"])
+        assert res["chain_id"] == block["block"]["header"]["chain_id"]
+        # assert res["time"] == datetime.strptime(
+        #     block["block"]["header"]["time"], "%Y-%m-%dT%H:%M:%S.%fZ"
+        # )
+        assert res["block_hash"] == block["block_id"]["hash"]
+        assert res["proposer_address"] == block["block"]["header"]["proposer_address"]
+
+    await drop_tables(pool)
