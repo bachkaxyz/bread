@@ -1,5 +1,6 @@
 from ast import Tuple
 import asyncio, aiohttp, json, asyncpg, os
+import sys
 import time
 import logging
 import traceback
@@ -38,44 +39,35 @@ async def get_live_chain_data(
             block_data = await chain.get_block(session, sem)
             if block_data is not None:
                 current_block = int(block_data["block"]["header"]["height"])
-                print(f"current block - {current_block}")
+                # print(f"current block - {current_block}")
                 if last_block >= current_block:
                     await asyncio.sleep(chain.time_between_blocks)
                 else:
                     last_block = current_block
-                    if await process_block(
+
+                    block_processed = not await process_block(
                         chain=chain,
                         height=current_block,
                         pool=pool,
                         session=session,
                         sem=sem,
                         block_data=block_data,
-                    ):
-                        print(f"processed live block - {current_block}")
-                    else:
-                        # should we save this to db?
-                        print(f"failed to process block - {current_block}")
+                    )
 
-                    txs_data = await chain.get_block_txs(session, sem, current_block)
+                    tx_processed = not await process_tx(
+                        current_block, chain, pool, session, sem
+                    )
 
-                    if txs_data:
-
-                        txs_data = txs_data["tx_responses"]
-                        await upsert_raw_txs(
-                            pool, {current_block: txs_data}, chain.chain_id
+                    if block_processed or tx_processed:
+                        raise Exception(
+                            f"block or tx not processed {block_processed=} {tx_processed=}"
                         )
-                        print(f"processed live txs {current_block}")
-                    else:
-                        # should we save this to db?
-                        print(f"failed to get txs for block - {current_block}")
+
             else:
-                print(f"block_data is None")
-                # save error to db
+                raise Exception("cannot pull block data")
 
         except Exception as e:
-            print(
-                f"live - Failed to get a block from {chain.apis[chain.current_api_index]} - {repr(e)}"
-            )
+            print(f"live - Failed to get a block {last_block} - {repr(e)}")
             chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
 
 
@@ -100,11 +92,17 @@ async def backfill_data(
             print(f"processing {log_name} {min_height_in_db} - {max_height_in_db}")
             tasks = []
             for new_min in range(min_height_in_db, max_height_in_db, batch_size):
+                print(
+                    f"processing subsection {log_name} {new_min} - {new_min + batch_size}"
+                )
                 tasks = [
                     process_missing_data(h, chain, pool, session, sem)
                     for h in range(new_min, new_min + batch_size)
                 ]
                 await asyncio.gather(*tasks)
+                print(
+                    f"processed subsection {log_name} {new_min} - {new_min + batch_size}"
+                )
                 with open(f"indexer/api_hit_miss_log.txt", "w") as f:
                     f.write(
                         f"start time: {start_time} current time: {time.time()} elapsed: {time.time() - start_time}\n"
@@ -113,6 +111,9 @@ async def backfill_data(
                         f.write(
                             f"{chain.apis[i]} - hit: {chain.apis_hit[i]} miss: {chain.apis_miss[i]}\n"
                         )
+            print(f"processed {log_name} {min_height_in_db} - {max_height_in_db}")
+
+        await asyncio.sleep(chain.time_between_blocks)
 
 
 msg_cols, log_cols = None, None
@@ -149,7 +150,7 @@ async def main():
                 log_cols = set(await get_table_cols(pool, "log"))
 
             payload = notification.payload
-            print(f"New tx: {payload}")
+            # print(f"New tx: {payload}")
             txhash, chain_id = payload.split(" ")
             async with pool.acquire() as conn:
                 data = await conn.fetchrow(
@@ -168,7 +169,7 @@ async def main():
             await add_current_log_columns(pool, cur_log_cols)
             await add_logs(pool, logs)
 
-            print(f"updated messages for {txhash}")
+            # print(f"updated messages for {txhash}")
 
         listener = asyncpg_listen.NotificationListener(
             asyncpg_listen.connect_func(

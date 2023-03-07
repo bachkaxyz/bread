@@ -33,19 +33,16 @@ async def process_tx(
     pool: asyncpg.Pool,
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
-):
-    print(f"processing tx {height}")
+) -> bool:
     txs_data = await chain.get_block_txs(session, sem, height)
     try:
         if txs_data is None:
-            print(f"txs_data is None")
             raise Exception("txs_data is None")
         else:
             txs_data = txs_data["tx_responses"]
             await upsert_raw_txs(pool, {height: txs_data}, chain.chain_id)
+            return True
 
-            print(f"upserting tx {height}")
     except Exception as e:
         print(f"upsert_txs error {repr(e)} - {height}")
-        print(f"trying again... {txs_data}")
-        traceback.print_exc()
+        return False
