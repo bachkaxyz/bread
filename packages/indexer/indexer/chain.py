@@ -14,6 +14,7 @@ class CosmosChain:
     apis_hit: List[int] = field(default_factory=list)
     apis_miss: List[int] = field(default_factory=list)
     current_api_index: int = 0
+    time_between_blocks: int =1
 
     async def is_valid_response(self, resp: aiohttp.ClientResponse) -> bool:
         try:

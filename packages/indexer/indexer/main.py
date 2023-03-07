@@ -19,30 +19,11 @@ from indexer.db import (
 )
 from indexer.parser import Log, parse_logs
 import asyncpg_listen
+from indexer.process import process_block, process_tx
 
 load_dotenv()
 
-batch_size = 20  # int(os.getenv("BATCH_SIZE", 100))
-
-
-async def process_block(
-    height: int,
-    chain: CosmosChain,
-    pool: asyncpg.Pool,
-    session: aiohttp.ClientSession,
-    sem: asyncio.Semaphore,
-    block_data: dict = None,
-) -> bool:
-    if block_data is None:
-        # this is because block data might be passed in from the live chain data (so removing a duplicated request)
-        block_data = await chain.get_block(session, sem, height)
-    try:
-        await upsert_raw_blocks(pool, block_data)
-        return True
-    except Exception as e:
-        print(f"upsert_block error {repr(e)} - {height}")
-        traceback.print_exc()
-        return False
+batch_size = int(os.getenv("BATCH_SIZE", 20))
 
 
 async def get_live_chain_data(
@@ -59,7 +40,7 @@ async def get_live_chain_data(
                 current_block = int(block_data["block"]["header"]["height"])
                 print(f"current block - {current_block}")
                 if last_block >= current_block:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(chain.time_between_blocks)
                 else:
                     last_block = current_block
                     if await process_block(
@@ -96,32 +77,6 @@ async def get_live_chain_data(
                 f"live - Failed to get a block from {chain.apis[chain.current_api_index]} - {repr(e)}"
             )
             chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
-
-    print("live complete")
-
-
-async def process_tx(
-    height: int,
-    chain: CosmosChain,
-    pool: asyncpg.Pool,
-    session: aiohttp.ClientSession,
-    sem: asyncio.Semaphore,
-):
-    print(f"processing tx {height}")
-    txs_data = await chain.get_block_txs(session, sem, height)
-    try:
-        if txs_data is None:
-            print(f"txs_data is None")
-            raise Exception("txs_data is None")
-        else:
-            txs_data = txs_data["tx_responses"]
-            await upsert_raw_txs(pool, {height: txs_data}, chain.chain_id)
-
-            print(f"upserting tx {height}")
-    except Exception as e:
-        print(f"upsert_txs error {repr(e)} - {height}")
-        print(f"trying again... {txs_data}")
-        traceback.print_exc()
 
 
 async def backfill_data(
@@ -248,6 +203,7 @@ async def main():
                 apis=apis,
                 apis_hit=[0 for i in range(len(apis))],
                 apis_miss=[0 for i in range(len(apis))],
+                time_between_blocks=int(os.getenv("TIME_BETWEEN_BLOCKS", 1)),
             )
             print(f"chain: {chain.chain_id} min height: {chain.min_block_height}")
             tasks = [
