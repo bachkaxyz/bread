@@ -1,8 +1,9 @@
+from ast import Tuple
 import asyncio, aiohttp, json, asyncpg, os
 import time
 import logging
 import traceback
-from typing import List
+from typing import Awaitable, Callable, List
 from dotenv import load_dotenv
 from indexer.chain import CosmosChain
 from indexer.db import (
@@ -21,12 +22,12 @@ import asyncpg_listen
 
 load_dotenv()
 
-batch_size = int(os.getenv("BATCH_SIZE", 100))
+batch_size = 20  # int(os.getenv("BATCH_SIZE", 100))
 
 
 async def process_block(
-    chain: CosmosChain,
     height: int,
+    chain: CosmosChain,
     pool: asyncpg.Pool,
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
@@ -99,35 +100,6 @@ async def get_live_chain_data(
     print("live complete")
 
 
-async def backfill_block(height, chain, pool, session, sem):
-    if not (
-        await process_block(
-            chain=chain, height=height, pool=pool, session=session, sem=sem
-        )
-    ):
-        # log error
-        print(f"failed to backfill block - {height}")
-    return height
-
-
-async def backfill_blocks(
-    chain: CosmosChain,
-    pool: asyncpg.pool,
-    session: aiohttp.ClientSession,
-    sem: asyncio.Semaphore,
-):
-    tasks = []
-    batch_size = 100
-    async for height in get_missing_blocks(pool, session, sem, chain):
-        tasks.append(
-            asyncio.ensure_future(backfill_block(height, chain, pool, session, sem))
-        )
-        if len(tasks) >= batch_size:
-            heights = await asyncio.gather(*tasks)
-            print(f"blocks inserted: {min(heights)} - {max(heights)}")
-            tasks = []
-
-
 async def process_tx(
     height: int,
     chain: CosmosChain,
@@ -152,24 +124,29 @@ async def process_tx(
         traceback.print_exc()
 
 
-async def check_missing_txs(
+async def backfill_data(
+    get_missing_data: Callable[[asyncpg.Pool, CosmosChain], Awaitable[List[tuple]]],
+    process_missing_data: Callable[
+        [int, CosmosChain, asyncpg.Pool, aiohttp.ClientSession, asyncio.Semaphore],
+        Awaitable[None],
+    ],
     chain: CosmosChain,
-    pool: asyncpg.pool,
+    pool: asyncpg.Pool,
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
+    log_name: str = "",
 ):
     tasks = []
-    section_size = 1000
     start_time = time.time()
     while True:
-        # print("getting block txs")
-        missing_txs_to_query = await get_missing_txs(pool, chain)
-        print(f"missing txs: {missing_txs_to_query}")
+        missing_txs_to_query = await get_missing_data(pool, chain)
+        print(f"missing {log_name}: {missing_txs_to_query}")
         for min_height_in_db, max_height_in_db in missing_txs_to_query:
+            print(f"processing {log_name} {min_height_in_db} - {max_height_in_db}")
             tasks = []
             for new_min in range(min_height_in_db, max_height_in_db, batch_size):
                 tasks = [
-                    process_tx(h, chain, pool, session, sem)
+                    process_missing_data(h, chain, pool, session, sem)
                     for h in range(new_min, new_min + batch_size)
                 ]
                 await asyncio.gather(*tasks)
@@ -181,11 +158,6 @@ async def check_missing_txs(
                         f.write(
                             f"{chain.apis[i]} - hit: {chain.apis_hit[i]} miss: {chain.apis_miss[i]}\n"
                         )
-        await asyncio.sleep(1)
-
-
-async def backfill_txs():
-    pass
 
 
 msg_cols, log_cols = None, None
@@ -263,7 +235,9 @@ async def main():
                 )
             raw_chain = json.loads(await raw_chain.read())
             raw_apis = raw_chain["apis"]["rest"]
-            apis = [api["address"] for api in raw_apis] + os.getenv("APIS").split(",")
+            apis = os.getenv("APIS").split(
+                ","
+            )  # + [api["address"] for api in raw_apis]
 
             chain = CosmosChain(
                 chain_id=raw_chain["chain_id"],
@@ -281,8 +255,24 @@ async def main():
                     {"txs_to_logs": handle_tx_notifications},
                     policy=asyncpg_listen.ListenPolicy.ALL,
                 ),
-                # backfill_blocks(chain, pool, session, sem),
-                # check_missing_txs(chain, pool, session, sem),
+                backfill_data(
+                    get_missing_data=get_missing_blocks,
+                    process_missing_data=process_block,
+                    chain=chain,
+                    pool=pool,
+                    session=session,
+                    sem=sem,
+                    log_name="blocks",
+                ),
+                backfill_data(
+                    get_missing_data=get_missing_txs,
+                    process_missing_data=process_tx,
+                    chain=chain,
+                    pool=pool,
+                    session=session,
+                    sem=sem,
+                    log_name="txs",
+                ),
                 get_live_chain_data(chain, pool, session, sem),
             ]
 

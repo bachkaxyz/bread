@@ -23,7 +23,6 @@ class CosmosChain:
                 and resp.status == 200
             )
         except Exception as e:
-            traceback.print_exc()
             return False
 
     async def get_json(self, resp: aiohttp.ClientResponse) -> dict:
@@ -49,10 +48,7 @@ class CosmosChain:
                         else:
                             raise Exception("API Response Not Valid")
             except Exception as e:
-                traceback.print_exc()
-                print(
-                    f"failed to get {endpoint} from {self.apis[self.current_api_index]}"
-                )
+                print(f"failed to get {self.apis[self.current_api_index]}{endpoint}")
                 self.apis_miss[self.current_api_index] += 1
                 self.current_api_index = (self.current_api_index + 1) % len(self.apis)
                 # save error to db
