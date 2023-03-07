@@ -12,7 +12,7 @@ async def process_block(
     chain: CosmosChain,
     pool: asyncpg.Pool,
     session: aiohttp.ClientSession,
-    sem: asyncore.Semaphore,
+    sem: asyncio.Semaphore,
     block_data: dict = None,
 ) -> bool:
     if block_data is None:
