@@ -45,7 +45,7 @@ async def get_live_chain_data(
                 else:
                     last_block = current_block
 
-                    block_processed = not await process_block(
+                    block_processed = await process_block(
                         chain=chain,
                         height=current_block,
                         pool=pool,
@@ -54,11 +54,11 @@ async def get_live_chain_data(
                         block_data=block_data,
                     )
 
-                    tx_processed = not await process_tx(
+                    tx_processed = await process_tx(
                         current_block, chain, pool, session, sem
                     )
 
-                    if block_processed or tx_processed:
+                    if not block_processed or not tx_processed:
                         raise Exception(
                             f"block or tx not processed {block_processed=} {tx_processed=}"
                         )
