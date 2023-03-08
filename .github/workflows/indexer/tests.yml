@@ -2,10 +2,8 @@ name: Indexer Tests
 
 on:
   push:
-    branches: [ "*" ]
   pull_request:
-    branches: [ "*" ]
-
+  workflow_dispatch:
 permissions:
   contents: read
 
