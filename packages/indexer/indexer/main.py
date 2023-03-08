@@ -26,6 +26,8 @@ load_dotenv()
 
 batch_size = int(os.getenv("BATCH_SIZE", 20))
 
+msg_cols, log_cols = None, None
+
 
 async def get_live_chain_data(
     chain: CosmosChain,
@@ -116,9 +118,6 @@ async def backfill_data(
         await asyncio.sleep(chain.time_between_blocks)
 
 
-msg_cols, log_cols = None, None
-
-
 async def on_request_start(session, context, params):
     logging.getLogger("aiohttp.client").debug(f"Starting request <{params}>")
 
@@ -159,7 +158,6 @@ async def main():
                     txhash,
                 )
             raw_logs, raw_tx = data
-            logs: List[Log]
 
             logs = parse_logs(raw_logs, txhash)
             cur_log_cols = set()
