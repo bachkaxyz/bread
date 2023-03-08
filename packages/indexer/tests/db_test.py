@@ -15,18 +15,21 @@ import pytest
 import asyncpg
 from dotenv import load_dotenv
 
-load_dotenv()
-
 
 @pytest.fixture
 async def mock_pool():
-    return await asyncpg.create_pool(
+    load_dotenv()
+    pool = await asyncpg.create_pool(
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
     )
+    # make sure its a clean db
+    await drop_tables(pool)
+    return pool
+    
 
 
 @pytest.fixture

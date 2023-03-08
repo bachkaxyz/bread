@@ -1,0 +1,14 @@
+version: '3'
+services:
+  indexer:
+    image: indexer-dev
+    env_file:
+      - .env
+      - ./../../.env
+    volumes:
+      - ./:/indexer
+networks:
+  default:
+    name: sn-mono-network
+    driver: bridge
+    external: true
