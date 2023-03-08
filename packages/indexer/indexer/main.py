@@ -88,22 +88,22 @@ async def backfill_data(
     start_time = time.time()
     while True:
         missing_txs_to_query = await get_missing_data(pool, chain)
-        print(f"missing {log_name}: {missing_txs_to_query}")
+        # print(f"missing {log_name}: {missing_txs_to_query}")
         for min_height_in_db, max_height_in_db in missing_txs_to_query:
-            print(f"processing {log_name} {min_height_in_db} - {max_height_in_db}")
+            # print(f"processing {log_name} {min_height_in_db} - {max_height_in_db}")
             tasks = []
             for new_min in range(min_height_in_db, max_height_in_db, batch_size):
-                print(
-                    f"processing subsection {log_name} {new_min} - {new_min + batch_size}"
-                )
+                # print(
+                #     f"processing subsection {log_name} {new_min} - {new_min + batch_size}"
+                # )
                 tasks = [
                     process_missing_data(h, chain, pool, session, sem)
                     for h in range(new_min, new_min + batch_size)
                 ]
                 await asyncio.gather(*tasks)
-                print(
-                    f"processed subsection {log_name} {new_min} - {new_min + batch_size}"
-                )
+                # print(
+                #     f"processed subsection {log_name} {new_min} - {new_min + batch_size}"
+                # )
                 with open(f"indexer/api_hit_miss_log.txt", "w") as f:
                     f.write(
                         f"start time: {start_time} current time: {time.time()} elapsed: {time.time() - start_time}\n"
@@ -112,7 +112,7 @@ async def backfill_data(
                         f.write(
                             f"{chain.apis[i]} - hit: {chain.apis_hit[i]} miss: {chain.apis_miss[i]}\n"
                         )
-            print(f"processed {log_name} {min_height_in_db} - {max_height_in_db}")
+            # print(f"processed {log_name} {min_height_in_db} - {max_height_in_db}")
 
         await asyncio.sleep(chain.time_between_blocks)
 

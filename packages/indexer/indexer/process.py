@@ -17,7 +17,10 @@ async def process_block(
         # this is because block data might be passed in from the live chain data (so removing a duplicated request)
         block_data = await chain.get_block(session, sem, height)
     try:
-        await upsert_raw_blocks(pool, block_data)
+        if block_data is not None:
+            await upsert_raw_blocks(pool, block_data)
+        else:
+            raise Exception(f"block_data is None - {block_data}")
         return True
     except Exception as e:
         print(f"upsert_block error {repr(e)} - {height}")
