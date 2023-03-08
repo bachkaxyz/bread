@@ -104,14 +104,14 @@ async def backfill_data(
                 # print(
                 #     f"processed subsection {log_name} {new_min} - {new_min + batch_size}"
                 # )
-                with open(f"indexer/api_hit_miss_log.txt", "w") as f:
-                    f.write(
-                        f"start time: {start_time} current time: {time.time()} elapsed: {time.time() - start_time}\n"
-                    )
-                    for i in range(len(chain.apis)):
-                        f.write(
-                            f"{chain.apis[i]} - hit: {chain.apis_hit[i]} miss: {chain.apis_miss[i]}\n"
-                        )
+                # with open(f"indexer/api_hit_miss_log.txt", "w") as f:
+                #     f.write(
+                #         f"start time: {start_time} current time: {time.time()} elapsed: {time.time() - start_time}\n"
+                #     )
+                #     for i in range(len(chain.apis)):
+                #         f.write(
+                #             f"{chain.apis[i]} - hit: {chain.apis_hit[i]} miss: {chain.apis_miss[i]}\n"
+                #         )
             # print(f"processed {log_name} {min_height_in_db} - {max_height_in_db}")
 
         await asyncio.sleep(chain.time_between_blocks)
