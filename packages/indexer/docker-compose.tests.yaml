@@ -1,0 +1,32 @@
+version: '3'
+x-common-variables:
+  &common-variables
+  - POSTGRES_USER=postgres
+  - POSTGRES_PASSWORD=postgres
+  - POSTGRES_DB=postgres
+  - POSTGRES_PORT=5430
+  - POSTGRES_HOST=test_postgres
+services:
+  indexer:
+    image: indexer-dev
+    command: pytest --cov-report=xml --cov-report term-missing -vvv
+    depends_on:
+      - test_postgres
+    environment: *common-variables
+    volumes:
+      - .:/indexer
+  test_postgres:
+    image: postgres:14
+    container_name: test_postgres
+    environment: *common-variables
+    ports:
+      - 5430:5430
+    expose:
+      - 5430
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "postgres" ]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
+    command: -p 5430 # runs postgres on a different port

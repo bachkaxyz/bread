@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import traceback
 from typing import Dict, List, Tuple
 import aiohttp
 
@@ -88,39 +87,6 @@ async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_i
                 )
 
 
-async def get_missing_blocks(
-    pool: asyncpg.pool,
-    session: aiohttp.ClientSession,
-    sem: asyncio.Semaphore,
-    chain: CosmosChain,
-):
-    while True:
-        block_data = await chain.get_block(session, sem)
-        current_height = int(block_data["block"]["header"]["height"])
-        chain_id = block_data["block"]["header"]["chain_id"]
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                select height, difference_per_block from (
-                    select height, COALESCE(height - LAG(height) over (order by time), -1) as difference_per_block, chain_id
-                    from blocks
-                    where chain_id = $1
-                ) as dif
-                where difference_per_block <> 1 and difference_per_block <> -1
-                """,
-                chain_id,
-            )
-            if not rows:
-                for i in range(chain.min_block_height, current_height):
-                    yield i
-            for height, dif in rows:
-                if dif == -1:
-                    yield chain.min_block_height
-                else:
-                    for i in range(height - dif, height):
-                        yield i
-
-
 async def add_current_log_columns(pool: asyncpg.pool, new_cols: List[tuple[str, str]]):
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -155,41 +121,45 @@ async def add_logs(pool: asyncpg.pool, logs: List[Log]):
                 )
 
 
-async def get_missing_txs(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
-    """
-    Returns the MISSING blocks that we are missing txs for
-    Returns a list of tuples of (start_height, end_height) INCLUSIVE
-    """
+async def get_missing_from_raw(pool: asyncpg.pool, chain: CosmosChain, table_name: str):
     async with pool.acquire() as conn:
         rows = await conn.fetch(
-            """
+            f"""
                 select height, difference_per_block from (
                     select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
-                    from raw_txs
+                    from {table_name}
                     where chain_id = $1
                 ) as dif
                 where difference_per_block <> 1
-        """,
+            """,
             chain.chain_id,
         )
 
-        # the above query returns the difference between the two blocks that exists
+    # the above query returns the difference between the two blocks that exists
 
-        # so if we have height=7285179 and height=7285186 then the difference is 7
-        # but we really are missing the blocks between 7285179 and 7285186
+    # so if we have height=7285179 and height=7285186 then the difference is 7
+    # but we really are missing the blocks between 7285179 and 7285186
 
-        # so we add 1 to the bottom and subtract 1 from the top to get the range of blocks we need to query
+    # so we add 1 to the bottom and subtract 1 from the top to get the range of blocks we need to query
 
-        # this query returns the difference between the current block and the previous block, if there is no previous block it returns -1
-        # if dif == -1 and  if min_block_height == height and remove that row, otherwise return that number and min_block_height
-        updated_rows = []
-        for height, dif in rows:
-            if dif != -1:
-                updated_rows.append(((height - dif) + 1, height - 1))
+    # this query returns the difference between the current block and the previous block, if there is no previous block it returns -1
+    # if dif == -1 and  if min_block_height == height and remove that row, otherwise return that number and min_block_height
+    updated_rows = []
+    for height, dif in rows:
+        if dif != -1:
+            updated_rows.append(((height - dif) + 1, height - 1))
+        else:
+            if height == chain.min_block_height:
+                continue
             else:
-                if height == chain.min_block_height:
-                    continue
-                else:
-                    updated_rows.append((chain.min_block_height, height - 1))
+                updated_rows.append((chain.min_block_height, height - 1))
 
-        return updated_rows
+    return updated_rows
+
+
+async def get_missing_txs(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
+    return await get_missing_from_raw(pool, chain, "raw_txs")
+
+
+async def get_missing_blocks(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
+    return await get_missing_from_raw(pool, chain, "raw_blocks")
