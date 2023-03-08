@@ -2,7 +2,15 @@ import asyncio
 from datetime import datetime
 import json
 import os
-from indexer.db import create_tables, drop_tables, get_table_cols, upsert_raw_blocks
+from typing import Dict
+import aiohttp
+from indexer.db import (
+    create_tables,
+    drop_tables,
+    get_missing_blocks,
+    get_table_cols,
+    upsert_raw_blocks,
+)
 import pytest
 import asyncpg
 from dotenv import load_dotenv
@@ -11,7 +19,7 @@ load_dotenv()
 
 
 @pytest.fixture
-async def pool():
+async def mock_pool():
     return await asyncpg.create_pool(
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT"),
@@ -28,7 +36,7 @@ def raw_blocks():
 
 
 @pytest.mark.asyncio
-async def test_create_drop_tables(pool: asyncpg.pool):
+async def test_create_drop_tables(mock_pool: asyncpg.pool):
     async def check_tables(pool, table_names, schema) -> int:
         async with pool.acquire() as conn:
             results = await conn.fetch(
@@ -41,13 +49,13 @@ async def test_create_drop_tables(pool: asyncpg.pool):
             )
         return len(results)
 
-    await create_tables(pool)
+    await create_tables(mock_pool)
 
     table_names = ("raw_blocks", "raw_txs", "blocks", "txs", "logs", "log_columns")
 
-    assert await check_tables(pool, table_names, "public") == len(table_names)
+    assert await check_tables(mock_pool, table_names, "public") == len(table_names)
 
-    assert await get_table_cols(pool, "blocks") == [
+    assert await get_table_cols(mock_pool, "blocks") == [
         "height",
         "chain_id",
         "time",
@@ -55,18 +63,21 @@ async def test_create_drop_tables(pool: asyncpg.pool):
         "proposer_address",
     ]
 
-    await drop_tables(pool)
+    await drop_tables(mock_pool)
 
-    assert await check_tables(pool, table_names, "public") == 0
+    assert await check_tables(mock_pool, table_names, "public") == 0
 
 
 @pytest.mark.asyncio
-async def test_upsert_raw_blocks(pool, raw_blocks):
-    await create_tables(pool)
+async def test_upsert_raw_blocks(
+    mock_pool,
+    raw_blocks,
+):
+    await create_tables(mock_pool)
     for block in raw_blocks:
-        await upsert_raw_blocks(pool, block)
+        await upsert_raw_blocks(mock_pool, block)
 
-    async with pool.acquire() as conn:
+    async with mock_pool.acquire() as conn:
         raw_results = await conn.fetch(
             """
             select * from raw_blocks
@@ -92,4 +103,6 @@ async def test_upsert_raw_blocks(pool, raw_blocks):
         assert res["block_hash"] == block["block_id"]["hash"]
         assert res["proposer_address"] == block["block"]["header"]["proposer_address"]
 
-    await drop_tables(pool)
+    # assert await get_missing_blocks(mock_pool, mock_session, mock_sem, mock_chain) == []
+
+    await drop_tables(mock_pool)

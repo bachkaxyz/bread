@@ -1,0 +1,34 @@
+name: Indexer Tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "*" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+    - uses: actions/checkout@v3
+    
+    
+    - name: cd into Indexer
+      run: cd package/indexer
+
+    - name: Docker compose tests run
+      uses: cloudposse/github-action-docker-compose-test-run@0.1.2
+      with: 
+        file: |
+          - docker-compose.yaml
+          - docker-compose.tests.yaml
+        service: indexer
+        command: pytest --cov="indexer" --cov-report=xml --cov-report term-missing tests/ -vvv
+    
+      
