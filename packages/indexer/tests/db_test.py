@@ -13,12 +13,10 @@ from indexer.db import (
 )
 import pytest
 import asyncpg
-from dotenv import load_dotenv
 
 
 @pytest.fixture
 async def mock_pool():
-    load_dotenv()
     pool = await asyncpg.create_pool(
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT"),
@@ -29,7 +27,6 @@ async def mock_pool():
     # make sure its a clean db
     await drop_tables(pool)
     return pool
-    
 
 
 @pytest.fixture
