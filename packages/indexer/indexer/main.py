@@ -3,7 +3,6 @@ import asyncio, aiohttp, json, asyncpg, os
 import sys
 import time
 import logging
-import traceback
 from typing import Awaitable, Callable, List
 from dotenv import load_dotenv
 from indexer.chain import CosmosChain
@@ -139,14 +138,8 @@ async def main():
         async def handle_tx_notifications(
             notification: asyncpg_listen.NotificationOrTimeout,
         ) -> None:
-            global msg_cols, log_cols
             if isinstance(notification, asyncpg_listen.Timeout):
                 return
-
-            if msg_cols is None or log_cols is None:
-                print("cols are none")
-                msg_cols = set(await get_table_cols(pool, "messages"))
-                log_cols = set(await get_table_cols(pool, "log"))
 
             payload = notification.payload
             # print(f"New tx: {payload}")
@@ -162,7 +155,7 @@ async def main():
             logs = parse_logs(raw_logs, txhash)
             cur_log_cols = set()
             for log in logs:
-                cur_log_cols = cur_log_cols.union(set(log.get_cols()))
+                cur_log_cols = cur_log_cols.union(log.get_cols())
 
             await add_current_log_columns(pool, cur_log_cols)
             await add_logs(pool, logs)

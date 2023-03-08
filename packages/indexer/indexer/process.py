@@ -1,6 +1,4 @@
 import asyncio
-import asyncore
-import traceback
 import aiohttp
 import asyncpg
 from indexer.chain import CosmosChain
@@ -23,7 +21,6 @@ async def process_block(
         return True
     except Exception as e:
         print(f"upsert_block error {repr(e)} - {height}")
-        traceback.print_exc()
         return False
 
 

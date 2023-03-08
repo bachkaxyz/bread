@@ -1,7 +1,6 @@
 import asyncio
 import json
 import os
-import traceback
 from typing import Dict, List, Tuple
 import aiohttp
 
