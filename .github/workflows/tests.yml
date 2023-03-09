@@ -24,7 +24,6 @@ jobs:
           - name: Pytest coverage comment
             uses: MishaKav/pytest-coverage-comment@main
             with:
-              github-token: djj
               junitxml-path: packages/indexer/pytest.xml
               pytest-xml-coverage-path: packages/indexer/coverage.xml
 
