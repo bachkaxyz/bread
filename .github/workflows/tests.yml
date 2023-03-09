@@ -26,6 +26,7 @@ jobs:
             with:
               junitxml-path: packages/indexer/pytest.xml
               pytest-xml-coverage-path: packages/indexer/coverage.xml
+              create-new-comment: true
 
           - name: Check the output coverage
             run: |
