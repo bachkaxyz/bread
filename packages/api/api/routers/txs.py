@@ -5,6 +5,7 @@ router = APIRouter(
     prefix="/txs", tags=["txs"], responses={404: {"description": "Not found"}}
 )
 
+
 @router.get("/cumulative")
 async def get_cumulative_txs():
     return await database.fetch_all(
@@ -23,6 +24,7 @@ async def get_cumulative_txs():
         """
     )
 
+
 @router.get("/daily")
 async def daily_txs():
     return await database.fetch_all(
@@ -33,4 +35,3 @@ async def daily_txs():
         order by "day"
         """
     )
-    

@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: api-dev
     platform: linux/arm64
     ports:
       - "4000:4000"
