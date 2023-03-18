@@ -1,4 +1,4 @@
-FROM python:3.10 as dashboard-base
+FROM python:3.10 AS dashboard-base
 
 RUN pip install poetry
 
@@ -8,13 +8,13 @@ WORKDIR /dashboard
 
 COPY ./dashboard ./dashboard
 
-FROM dashboard-base as dashboard-prod
+FROM dashboard-base AS dashboard-prod
 
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install
 
 CMD gunicorn --bind :8050 --log-level info --workers 1 --threads 8 --timeout 0 index:server
 
-FROM dashboard-base as dashboard-dev
+FROM dashboard-base AS dashboard-dev
 
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install --with dev
 

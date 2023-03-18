@@ -1,4 +1,4 @@
-FROM python:3.10 as indexer-base
+FROM python:3.10 AS indexer-base
 
 RUN pip install poetry
 
@@ -10,10 +10,10 @@ COPY . ./
 
 ENV PYTHONPATH=/indexer
 
-FROM indexer-base as indexer-prod
+FROM indexer-base AS indexer-prod
 
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install -vv
 
-FROM indexer-base as indexer-dev
+FROM indexer-base AS indexer-dev
 
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install --with dev -vv
