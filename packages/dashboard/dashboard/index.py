@@ -1,44 +1,25 @@
-# Run this app with `python app.py` and
-# visit http://127.0.0.1:8050/ in your web browser.
-
-from dash import Dash, html, dcc
-import plotly.express as px
-import pandas as pd
-from dotenv import load_dotenv
 import os
+from dash import Dash, html, dcc
+import dash
+from dotenv import load_dotenv
 
 load_dotenv()
 
-DEBUG_MODE = os.getenv("DEBUG").upper() == "TRUE"
+API_URL = os.getenv("API_URL")
 
-app = Dash(__name__)
+CHAIN_NAME = os.getenv("CHAIN_NAME")
 
-
-# assume you have a "long-form" data frame
-# see https://plotly.com/python/px-arguments/ for more options
-df = pd.DataFrame(
-    {
-        "Fruit": ["Apples", "Oranges", "Bananas", "Apples", "Oranges", "Bananas"],
-        "Amount": [4, 1, 2, 2, 4, 5],
-        "City": ["SF", "SF", "SF", "Montreal", "Montreal", "Montreal"],
-    }
-)
-
-fig = px.bar(df, x="Fruit", y="Amount", color="City", barmode="group")
+app = Dash(__name__, use_pages=True)
 
 app.layout = html.Div(
-    children=[
-        html.H1(children="Hello Dash"),
-        html.Div(
-            children="""
-        Dash: A web application framework for your data.
-    """
-        ),
-        dcc.Graph(id="example-graph", figure=fig),
+    [
+        html.H1(f"{CHAIN_NAME.capitalize()} Analytics Dashboard"),
+        dash.page_container,
     ]
 )
 
 server = app.server
 
 if __name__ == "__main__":
-    app.run_server(host="0.0.0.0", debug=DEBUG_MODE)
+    print("Restarted Server")
+    app.run(debug=True if os.getenv("ENV") == "development" else False, host="0.0.0.0")

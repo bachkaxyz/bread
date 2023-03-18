@@ -2,16 +2,15 @@ version: '3'
 services:
   dashboard:
     container_name: dashboard
-    build: 
-      context: .
+    build:
       dockerfile: Dockerfile
+    image: dashboard-dev
     restart: always
     ports:
       - "8050:8050"
     env_file:
       - .env
       - ./../../.env
-    command: python index.py
     volumes:
       - ./dashboard:/dashboard
 networks:
