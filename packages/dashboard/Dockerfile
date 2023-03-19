@@ -12,10 +12,10 @@ FROM dashboard-base AS dashboard-prod
 
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install
 
-CMD gunicorn --bind :8050 --log-level info --workers 1 --threads 8 --timeout 0 index:server
+CMD gunicorn --bind :8050 --log-level info --workers 1 --threads 8 --timeout 0 dashboard.index:server
 
 FROM dashboard-base AS dashboard-dev
 
 RUN POETRY_VIRTUALENVS_CREATE=false poetry install --with dev
 
-CMD python3 index.py
+CMD python3 dashboard/index.py
