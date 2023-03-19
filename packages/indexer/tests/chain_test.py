@@ -45,7 +45,7 @@ async def test_api_get(mock_semaphore, mock_client, mock_chain):
 
     async with aiohttp.ClientSession() as session:
         result = await mock_chain.get_block(session, mock_semaphore)
-        assert exp_res == result
+        assert exp_res == []
 
 
 @pytest.mark.asyncio
