@@ -1,9 +1,10 @@
-name: Deploy to Cloud Run
+name: Deploy API to Cloud Run
 
 on:
   push:
     branches:
       - jackal
+
 
 jobs:
   deploy:
@@ -21,27 +22,28 @@ jobs:
       uses: 'google-github-actions/auth@v1'
       with:
         credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+        export_environment_variables: true
 
     - name: Configure Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@master
+      uses: google-github-actions/setup-gcloud@v1.1.0
 
     - name: Authorize Docker push
       run: gcloud auth configure-docker
-
-    - name: Configure Docker
-      uses: docker/setup-docker@v1
+      
+    - name: debug
+      run: echo env
 
     - name: Build and push Docker image
       env:
-        IMAGE_TAG: gcr.io/${{ secrets.PROJECT_ID }}/$CI_REPOSITORY_NAME_SLUG/$CI_ACTION_REF_NAME/$CI_ACTION_REF_NAME-api:${{ github.sha }}
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
       run: |
-        docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile
+        docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile --target api-prod
         docker push $IMAGE_TAG
 
     - name: Update Cloud Run service
       env:
-        SERVICE_NAME: sn-mono-$CI_ACTION_REF_NAME-api
-        IMAGE_TAG: cr.io/${{ secrets.PROJECT_ID }}/$CI_REPOSITORY_NAME_SLUG/$CI_ACTION_REF_NAME/$CI_ACTION_REF_NAME-api:${{ github.sha }}
+        SERVICE_NAME: sn-mono-${{ env.CI_ACTION_REF_NAME }}-api
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
       run: |
         gcloud run services update $SERVICE_NAME \
           --platform managed \
