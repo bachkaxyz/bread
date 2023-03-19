@@ -1,15 +1,26 @@
-from typing import Union
+import os
 
+from api.database import database
 from fastapi import FastAPI
+
+from api.routers import txs
+from dotenv import load_dotenv
 
 app = FastAPI()
 
+app.include_router(txs.router)
+
+
+@app.on_event("startup")
+async def startup():
+    await database.connect()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await database.disconnect()
+
 
 @app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+async def root():
+    return {"message": "Hello Bigger Applications!"}
