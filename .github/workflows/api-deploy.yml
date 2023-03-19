@@ -29,18 +29,22 @@ jobs:
 
     - name: Authorize Docker push
       run: gcloud auth configure-docker
+      
+    - name: debug
+      run: |
+        echo $project_id
 
     - name: Build and push Docker image
       env:
-        IMAGE_TAG: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.project_id }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
       run: |
-        docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile
+        docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile --target api-prod
         docker push $IMAGE_TAG
 
     - name: Update Cloud Run service
       env:
         SERVICE_NAME: sn-mono-${{ env.CI_ACTION_REF_NAME }}-api
-        IMAGE_TAG: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.project_id }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
       run: |
         gcloud run services update $SERVICE_NAME \
           --platform managed \
