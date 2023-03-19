@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  test:
 
       runs-on: ubuntu-latest
       steps:
@@ -17,6 +17,3 @@ jobs:
           - name: Docker Compose Run Tests
             working-directory: packages/indexer
             run: docker compose -f docker-compose.yaml -f docker-compose.tests.yaml run indexer
-
-          - name: Comment coverage
-            uses: highspeedoffice/pytest-cov-xml-parser@v1
