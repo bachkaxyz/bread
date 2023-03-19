@@ -32,7 +32,7 @@ jobs:
 
     - name: Build and push Docker image
       env:
-        IMAGE_TAG: 'gcr.io/${{PROJECT_ID}}/${{CI_REPOSITORY_NAME_SLUG}}/${{CI_ACTION_REF_NAME}}/${{CI_ACTION_REF_NAME}}-api:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.PROJECT_ID }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{CI_ACTION_REF_NAME}}/${{CI_ACTION_REF_NAME}}-api:${{ github.sha }}'
       run: |
         docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile
         docker push $IMAGE_TAG
