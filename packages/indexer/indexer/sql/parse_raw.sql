@@ -16,7 +16,7 @@ $$
 $$
 LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER raw_block_insert
-BEFORE INSERT
+AFTER INSERT
 ON raw_blocks
 FOR EACH ROW EXECUTE PROCEDURE parse_raw_block();
 
@@ -59,7 +59,7 @@ $$
 $$ 
 LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER raw_tx_insert
-BEFORE INSERT
+AFTER INSERT
 ON raw_txs
 FOR EACH ROW EXECUTE PROCEDURE parse_raw_txs();
 

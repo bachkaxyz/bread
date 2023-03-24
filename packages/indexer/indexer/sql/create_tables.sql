@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS raw_txs (
 );
 CREATE TABLE IF NOT EXISTS txs (
     txhash TEXT NOT NULL PRIMARY KEY,
-    chain_id TEXT NOT NULL,
+    chain_id TEXT NOT NULL, 
     height BIGINT NOT NULL,
     tx JSONB,
     tx_response JSONB,
@@ -40,18 +40,10 @@ CREATE TABLE IF NOT EXISTS txs (
     gas_wanted BIGINT,
     codespace TEXT,
     timestamp TIMESTAMP,
-    logs_parsed_at TIMESTAMP DEFAULT NULL
-
+    logs_parsed_at TIMESTAMP DEFAULT NULL,    
     
-    -- FOREIGN KEY (chain_id, height) REFERENCES blocks (chain_id, height)
+    FOREIGN KEY (chain_id, height) REFERENCES raw_txs(chain_id, height) ON DELETE CASCADE
 );
--- CREATE TABLE IF NOT EXISTS messages (
---     txhash TEXT NOT NULL,
---     msg_index TEXT NOT NULL,
-    
---     PRIMARY KEY (txhash, msg_index),
---     FOREIGN KEY (txhash) REFERENCES txs (txhash)
--- );
 CREATE TABLE IF NOT EXISTS logs (
     txhash TEXT NOT NULL,
     msg_index TEXT NOT NULL, -- This should be an int
@@ -62,7 +54,7 @@ CREATE TABLE IF NOT EXISTS logs (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
     PRIMARY KEY (txhash, msg_index),
-    FOREIGN KEY (txhash) REFERENCES txs (txhash) -- this should be messages, but we don't have that table yet
+    FOREIGN KEY (txhash) REFERENCES txs(txhash) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS log_columns (
     event TEXT NOT NULL,
