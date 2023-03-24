@@ -131,7 +131,8 @@ async def main():
         database=os.getenv("POSTGRES_DB"),
     ) as pool:
         # drop tables for testing purposes
-        await drop_tables(pool)
+        if os.getenv("DROP_TABLES_ON_STARTUP", False):
+            await drop_tables(pool)
 
         await create_tables(pool)
 
@@ -182,9 +183,7 @@ async def main():
                 )
             raw_chain = json.loads(await raw_chain.read())
             raw_apis = raw_chain["apis"]["rest"]
-            apis = os.getenv("APIS").split(
-                ","
-            )  # + [api["address"] for api in raw_apis]
+            apis = os.getenv("APIS").split(",") + [api["address"] for api in raw_apis]
 
             chain = CosmosChain(
                 chain_id=raw_chain["chain_id"],
@@ -197,7 +196,7 @@ async def main():
                 apis_miss=[0 for i in range(len(apis))],
                 time_between_blocks=int(os.getenv("TIME_BETWEEN_BLOCKS", 1)),
             )
-            print(f"chain: {chain.chain_id} min height: {chain.min_block_height}")
+            # print(f"chain: {chain.chain_id} min height: {chain.min_block_height}")
             tasks = [
                 listener.run(
                     {"txs_to_logs": handle_tx_notifications},
