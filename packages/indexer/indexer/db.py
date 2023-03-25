@@ -63,6 +63,7 @@ async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
             """
             INSERT INTO raw_blocks (chain_id, height, block)
             VALUES ($1, $2, $3)
+            ON CONFLICT DO NOTHING
             """,
             chain_id,
             height,
@@ -78,6 +79,7 @@ async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_i
                     """
                     INSERT INTO raw_txs (chain_id, height, txs)
                     VALUES ($1, $2, $3)
+                    ON CONFLICT DO NOTHING
                     """,
                     chain_id,
                     height,
