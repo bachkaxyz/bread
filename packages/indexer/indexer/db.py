@@ -1,67 +1,66 @@
 import asyncio
+from dataclasses import dataclass
 import json
 import os
 from typing import Dict, List, Tuple
-import aiohttp
 
-import asyncpg
+from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
 from indexer.parser import Log
 
 
-async def drop_tables(pool: asyncpg.pool):
-    await pool.execute(
-        """
-        DROP TABLE IF EXISTS raw_blocks CASCADE;
-        DROP TABLE IF EXISTS raw_txs CASCADE;
-        DROP TABLE IF EXISTS blocks CASCADE;
-        DROP TABLE IF EXISTS txs CASCADE;
-        DROP TABLE IF EXISTS logs CASCADE;
-        DROP TABLE IF EXISTS log_columns CASCADE;
-        DROP TABLE IF EXISTS messages CASCADE;
-        """
-    )
+@dataclass
+class Database:
+    pool: Pool
+    schema: str = "public"
 
 
-async def get_table_cols(pool: asyncpg.pool, table_name):
-    async with pool.acquire() as conn:
+async def drop_tables(db: Database):
+    async with db.pool.acquire() as conn:
+        await conn.execute(f"DROP SCHEMA IF EXISTS {db.schema} CASCADE")
+        await conn.execute(f"CREATE SCHEMA {db.schema}")
+
+
+async def get_table_cols(db: Database, table_name: str):
+    async with db.pool.acquire() as conn:
         cols = await conn.fetch(
             """
             SELECT column_name
             FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = $1;
+            WHERE table_schema = $1 AND table_name = $2;
             """,
+            db.schema,
             table_name,
         )
+        print(cols)
         return [col["column_name"] for col in cols]
 
 
-async def create_tables(pool: asyncpg.pool):
+async def create_tables(db: Database):
     cur_dir = os.path.dirname(__file__)
-    async with pool.acquire() as conn:
-
+    async with db.pool.acquire() as conn:
         file_path = os.path.join(cur_dir, "sql/create_tables.sql")
         with open(file_path, "r") as f:
-            await conn.execute(f.read())
+            await conn.execute(f.read().replace("$schema", db.schema))
 
         # create the parse_raw function on insert trigger of raw
         file_path = os.path.join(cur_dir, "sql/parse_raw.sql")
         with open(file_path, "r") as f:
-            await conn.execute(f.read())
+            await conn.execute(f.read().replace("$schema", db.schema))
 
         file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
         with open(file_path, "r") as f:
-            await conn.execute(f.read())
+            await conn.execute(f.read().replace("$schema", db.schema))
 
 
-async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
-    async with pool.acquire() as conn:
+async def upsert_raw_blocks(db: Database, block: dict):
+    async with db.pool.acquire() as conn:
         chain_id, height = block["block"]["header"]["chain_id"], int(
             block["block"]["header"]["height"]
         )
         await conn.execute(
-            """
-            INSERT INTO raw_blocks (chain_id, height, block)
+            f"""
+            INSERT INTO {db.schema}.raw_blocks (chain_id, height, block)
             VALUES ($1, $2, $3)
             """,
             chain_id,
@@ -70,13 +69,13 @@ async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
         )
 
 
-async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_id: str):
-    async with pool.acquire() as conn:
+async def upsert_raw_txs(db: Database, txs: Dict[str, List[dict]], chain_id: str):
+    async with db.pool.acquire() as conn:
         async with conn.transaction():
             for height, tx in txs.items():
                 await conn.execute(
-                    """
-                    INSERT INTO raw_txs (chain_id, height, txs)
+                    f"""
+                    INSERT INTO {db.schema}.raw_txs (chain_id, height, txs)
                     VALUES ($1, $2, $3)
                     """,
                     chain_id,
@@ -85,13 +84,13 @@ async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_i
                 )
 
 
-async def add_current_log_columns(pool: asyncpg.pool, new_cols: List[tuple[str, str]]):
-    async with pool.acquire() as conn:
+async def add_current_log_columns(db: Database, new_cols: List[tuple[str, str]]):
+    async with db.pool.acquire() as conn:
         async with conn.transaction():
             for i, row in enumerate(new_cols):
                 await conn.execute(
                     f"""
-                    INSERT INTO log_columns (event, attribute)
+                    INSERT INTO {db.schema}.log_columns (event, attribute)
                     VALUES ($1, $2)
                     ON CONFLICT DO NOTHING
                     """,
@@ -100,13 +99,13 @@ async def add_current_log_columns(pool: asyncpg.pool, new_cols: List[tuple[str, 
                 )
 
 
-async def add_logs(pool: asyncpg.pool, logs: List[Log]):
-    async with pool.acquire() as conn:
+async def add_logs(db: Database, logs: List[Log]):
+    async with db.pool.acquire() as conn:
         async with conn.transaction():
             for log in logs:
                 await conn.execute(
-                    """
-                    INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
+                    f"""
+                    INSERT INTO {db.schema}.logs (txhash, msg_index, parsed, failed, failed_msg)
                     VALUES (
                         $1, $2, $3, $4, $5
                     )
@@ -119,13 +118,13 @@ async def add_logs(pool: asyncpg.pool, logs: List[Log]):
                 )
 
 
-async def get_missing_from_raw(pool: asyncpg.pool, chain: CosmosChain, table_name: str):
-    async with pool.acquire() as conn:
+async def get_missing_from_raw(db: Database, chain: CosmosChain, table_name: str):
+    async with db.pool.acquire() as conn:
         rows = await conn.fetch(
             f"""
                 select height, difference_per_block from (
                     select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
-                    from {table_name}
+                    from {db.schema}.{table_name}
                     where chain_id = $1
                 ) as dif
                 where difference_per_block <> 1
@@ -155,9 +154,20 @@ async def get_missing_from_raw(pool: asyncpg.pool, chain: CosmosChain, table_nam
     return updated_rows
 
 
-async def get_missing_txs(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
-    return await get_missing_from_raw(pool, chain, "raw_txs")
+async def get_missing_txs(db: Database, chain: CosmosChain) -> List[Tuple[int, int]]:
+    return await get_missing_from_raw(db, chain, "raw_txs")
 
 
-async def get_missing_blocks(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
-    return await get_missing_from_raw(pool, chain, "raw_blocks")
+async def get_missing_blocks(db: Database, chain: CosmosChain) -> List[Tuple[int, int]]:
+    return await get_missing_from_raw(db, chain, "raw_blocks")
+
+
+async def get_tx_raw_log_and_tx(
+    db: Database, chain_id: str, txhash: str
+) -> Tuple[str, str]:
+    async with db.pool.acquire() as conn:
+        return await conn.fetchrow(
+            f"SELECT raw_log, tx FROM {db.schema}.txs WHERE chain_id = $1 AND txhash = $2",
+            chain_id,
+            txhash,
+        )
