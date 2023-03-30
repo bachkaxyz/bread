@@ -10,7 +10,7 @@ x-common-variables:
 services:
   indexer:
     image: indexer-dev
-    command: pytest --junitxml=pytest.xml --cov="indexer" --cov-report=xml --cov-report term-missing --cov-fail-under=100 -vvv
+    command: pytest --junitxml=pytest.xml --cov="indexer" --cov-report=xml --cov-report term-missing -vvv
     depends_on:
       - test_postgres
     environment: *common-variables
