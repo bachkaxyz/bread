@@ -3,12 +3,13 @@ name = "dbt-indexer"
 version = "0.1.0"
 description = ""
 authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
-packages = [{include = "dbt_indexer"}]
+packages = [{include = "indexer"}]
 
 [tool.poetry.dependencies]
 python = "3.10.*"
 dbt-core = "^1.4.5"
 dbt-postgres = "^1.4.5"
+psycopg2 = "^2.9.5"
 
 
 [build-system]

@@ -1,0 +1,18 @@
+services:
+  dbt:
+    container_name: dbt
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/dbt
+    environment:
+      - DBT_PROFILES_DIR=./indexer
+    env_file:
+      - ./../../.env
+    command: poetry run dbt debug --project-dir ./indexer
+networks:
+  default:
+    name: sn-mono-network
+    driver: bridge
+    external: true
