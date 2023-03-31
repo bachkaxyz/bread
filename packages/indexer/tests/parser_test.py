@@ -68,7 +68,7 @@ def test_parse_individual_log_event(mock_log_data):
 
 def test_parse_tx_logs(mock_log_data):
     # multiple events in one log
-    logs = parse_logs(json.dumps(mock_log_data))
+    logs = parse_logs(json.dumps(mock_log_data), "test_tx_hash")
     assert [log.get_cols() for log in logs] == [
         {
             ("message", "action"),
