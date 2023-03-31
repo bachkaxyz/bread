@@ -1,3 +1,4 @@
+import json
 from indexer.parser import Log, parse_log_event, parse_logs
 import pytest
 
@@ -65,22 +66,22 @@ def test_parse_individual_log_event(mock_log_data):
     }
 
 
-# def test_parse_tx_logs(mock_log_data):
-#     # multiple events in one log
-#     logs = parse_logs(json.dumps(mock_log_data)
-#     assert [log.get_cols() for log in logs] == [
-#         {
-#             ("message", "action"),
-#             ("message", "contract_address"),
-#             ("wasm", "contract_address"),
-#             ("message", "sender"),
-#             ("message", "module"),
-#         }
-#     ]
+def test_parse_tx_logs(mock_log_data):
+    # multiple events in one log
+    logs = parse_logs(json.dumps(mock_log_data))
+    assert [log.get_cols() for log in logs] == [
+        {
+            ("message", "action"),
+            ("message", "contract_address"),
+            ("wasm", "contract_address"),
+            ("message", "sender"),
+            ("message", "module"),
+        }
+    ]
 
-#     assert [log.dump() for log in logs] == [
-#         '{"message_action": ["_secret_compute_v1beta1_MsgExecuteContract"], "message_module": ["compute"], "message_sender": ["secret1rjml9f6ma7rwgqq9ud8e0aw2arhhj4v4hhzc4k"], "message_contract_address": ["secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898"], "wasm_contract_address": ["secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898", "secret1rgm2m5t530tdzyd99775n6vzumxa5luxcllml4"]}'
-#     ]
+    assert [log.dump() for log in logs] == [
+        '{"message_action": ["_secret_compute_v1beta1_MsgExecuteContract"], "message_module": ["compute"], "message_sender": ["secret1rjml9f6ma7rwgqq9ud8e0aw2arhhj4v4hhzc4k"], "message_contract_address": ["secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898"], "wasm_contract_address": ["secret1266jqzsyw98g3v8cz5cyhw2s9kwhtmtdnr0898", "secret1rgm2m5t530tdzyd99775n6vzumxa5luxcllml4"]}'
+    ]
 
 
 def test_parse_tx_log_error():
