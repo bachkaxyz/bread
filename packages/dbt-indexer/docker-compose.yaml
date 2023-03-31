@@ -8,8 +8,6 @@ services:
       - ./:/dbt-indexer
     environment:
       - DBT_PROFILES_DIR=./indexer
-    env_file:
-      - ./../../.env
     command: poetry run dbt test --project-dir ./indexer
 networks:
   default:

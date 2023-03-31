@@ -1,0 +1,4 @@
+services:
+  dbt:
+    env_file:
+      - ./../../.env
