@@ -2,13 +2,13 @@ import asyncio
 import aiohttp
 import asyncpg
 from indexer.chain import CosmosChain
-from indexer.db import upsert_raw_blocks, upsert_raw_txs
+from indexer.db import Database, upsert_raw_blocks, upsert_raw_txs
 
 
 async def process_block(
     height: int,
     chain: CosmosChain,
-    pool: asyncpg.Pool,
+    db: Database,
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
     block_data: dict = None,
@@ -18,7 +18,7 @@ async def process_block(
         block_data = await chain.get_block(session, sem, height)
     try:
         if block_data is not None:
-            await upsert_raw_blocks(pool, block_data)
+            await upsert_raw_blocks(db, block_data)
         else:
             raise Exception(f"block_data is None - {block_data}")
         return True
@@ -30,7 +30,7 @@ async def process_block(
 async def process_tx(
     height: int,
     chain: CosmosChain,
-    pool: asyncpg.Pool,
+    db: Database,
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
 ) -> bool:
@@ -40,7 +40,7 @@ async def process_tx(
             raise Exception("txs_data is None")
         else:
             txs_data = txs_data["tx_responses"]
-            await upsert_raw_txs(pool, {height: txs_data}, chain.chain_id)
+            await upsert_raw_txs(db, {height: txs_data}, chain.chain_id)
             return True
 
     except Exception as e:

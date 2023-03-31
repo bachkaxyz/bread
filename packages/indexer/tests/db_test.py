@@ -5,6 +5,7 @@ import os
 from typing import Dict
 import aiohttp
 from indexer.db import (
+    Database,
     create_tables,
     drop_tables,
     get_missing_blocks,
@@ -24,9 +25,15 @@ async def mock_pool():
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
     )
-    # make sure its a clean db
-    await drop_tables(pool)
     return pool
+
+
+@pytest.fixture
+async def mock_db(mock_pool):
+    db = Database(pool=mock_pool, schema=os.getenv("INDEXER_SCHEMA", "public"))
+    await db.pool.execute(f"CREATE SCHEMA IF NOT EXISTS {db.schema}")
+    await drop_tables(db)
+    return db
 
 
 @pytest.fixture
@@ -36,26 +43,25 @@ def raw_blocks():
 
 
 @pytest.mark.asyncio
-async def test_create_drop_tables(mock_pool: asyncpg.pool):
-    async def check_tables(pool, table_names, schema) -> int:
-        async with pool.acquire() as conn:
+async def test_create_drop_tables(mock_db: Database):
+    async def check_tables(mock_db: Database, table_names) -> int:
+        async with mock_db.pool.acquire() as conn:
             results = await conn.fetch(
                 f"""
                 SELECT table_name FROM information_schema.tables 
-                WHERE table_schema = $1
+                WHERE table_schema = '{mock_db.schema}'
                 AND table_name in {table_names}
-                """,
-                schema,
+                """
             )
         return len(results)
 
-    await create_tables(mock_pool)
+    await create_tables(mock_db)
 
     table_names = ("raw_blocks", "raw_txs", "blocks", "txs", "logs", "log_columns")
 
-    assert await check_tables(mock_pool, table_names, "public") == len(table_names)
+    assert await check_tables(mock_db, table_names) == len(table_names)
 
-    assert await get_table_cols(mock_pool, "blocks") == [
+    assert await get_table_cols(mock_db, "blocks") == [
         "height",
         "chain_id",
         "time",
@@ -63,28 +69,28 @@ async def test_create_drop_tables(mock_pool: asyncpg.pool):
         "proposer_address",
     ]
 
-    await drop_tables(mock_pool)
+    await drop_tables(mock_db)
 
-    assert await check_tables(mock_pool, table_names, "public") == 0
+    assert await check_tables(mock_db, table_names) == 0
 
 
 @pytest.mark.asyncio
 async def test_upsert_raw_blocks(
-    mock_pool,
+    mock_db: Database,
     raw_blocks,
 ):
-    await create_tables(mock_pool)
+    await create_tables(mock_db)
     for block in raw_blocks:
-        await upsert_raw_blocks(mock_pool, block)
+        await upsert_raw_blocks(mock_db, block)
 
-    async with mock_pool.acquire() as conn:
+    async with mock_db.pool.acquire() as conn:
         raw_results = await conn.fetch(
-            """
-            select * from raw_blocks
+            f"""
+            select * from {mock_db.schema}.raw_blocks
             """
         )
 
-        results = await conn.fetch("select * from blocks")
+        results = await conn.fetch(f"select * from {mock_db.schema}.blocks")
 
     assert len(raw_results) == len(raw_blocks)
     assert len(results) == len(raw_blocks)
@@ -103,6 +109,4 @@ async def test_upsert_raw_blocks(
         assert res["block_hash"] == block["block_id"]["hash"]
         assert res["proposer_address"] == block["block"]["header"]["proposer_address"]
 
-    # assert await get_missing_blocks(mock_pool, mock_session, mock_sem, mock_chain) == []
-
-    await drop_tables(mock_pool)
+    await drop_tables(mock_db)
