@@ -27,9 +27,3 @@ services:
       retries: 50
     restart: always
     command: -p 5430 # runs postgres on a different port
-
-networks:
-  default:
-    name: sn-mono-network
-    driver: bridge
-    external: true

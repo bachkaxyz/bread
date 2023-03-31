@@ -9,8 +9,3 @@ services:
     environment:
       - DBT_PROFILES_DIR=./indexer
     command: poetry run dbt test --project-dir ./indexer
-networks:
-  default:
-    name: sn-mono-network
-    driver: bridge
-    external: true

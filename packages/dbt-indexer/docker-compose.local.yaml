@@ -2,3 +2,8 @@ services:
   dbt:
     env_file:
       - ./../../.env
+networks:
+  default:
+    name: sn-mono-network
+    driver: bridge
+    external: true
