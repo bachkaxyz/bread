@@ -1,0 +1,8 @@
+
+
+============================== 2023-03-31 02:19:23.998053 | 1e392f5b-f458-4918-ae22-e9cd0bbd280f ==============================
+[0m02:19:23.998053 [info ] [MainThread]: Running with dbt=1.4.5
+[0m02:19:23.998951 [debug] [MainThread]: running dbt with arguments {'write_json': True, 'use_colors': True, 'printer_width': 80, 'version_check': True, 'partial_parse': True, 'static_parser': True, 'profiles_dir': '/Users/ethanleifer/.dbt', 'send_anonymous_usage_stats': True, 'quiet': False, 'no_print': False, 'cache_selected_only': False, 'project_name': 'indexer', 'skip_profile_setup': False, 'which': 'init', 'indirect_selection': 'eager'}
+[0m02:19:23.999065 [debug] [MainThread]: Tracking: tracking
+[0m02:19:24.012537 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x105cb77c0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x105cfe9b0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x105cfdff0>]}
+[0m02:19:24.014782 [debug] [MainThread]: Starter project path: /opt/homebrew/Caskroom/miniforge/base/envs/sn-mono/lib/python3.10/site-packages/dbt/include/starter_project
