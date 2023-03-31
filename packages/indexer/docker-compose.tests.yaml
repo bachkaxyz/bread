@@ -6,6 +6,7 @@ x-common-variables:
   - POSTGRES_DB=postgres
   - POSTGRES_PORT=5430
   - POSTGRES_HOST=test_postgres
+  - INDEXER_SCHEMA=tests
 services:
   indexer:
     image: indexer-dev

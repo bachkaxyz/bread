@@ -14,8 +14,10 @@ from indexer.db import (
     get_missing_blocks,
     get_missing_txs,
     get_table_cols,
+    get_tx_raw_log_and_tx,
     upsert_raw_blocks,
     upsert_raw_txs,
+    Database,
 )
 from indexer.exceptions import ProcessChainDataError
 from indexer.parser import Log, parse_logs
@@ -31,7 +33,7 @@ msg_cols, log_cols = None, None
 
 async def get_live_chain_data(
     chain: CosmosChain,
-    pool: asyncpg.Pool,
+    db: Database,
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
 ):
@@ -50,14 +52,14 @@ async def get_live_chain_data(
                     block_processed = await process_block(
                         chain=chain,
                         height=current_block,
-                        pool=pool,
+                        db=db,
                         session=session,
                         sem=sem,
                         block_data=block_data,
                     )
 
                     tx_processed = await process_tx(
-                        current_block, chain, pool, session, sem
+                        current_block, chain, db, session, sem
                     )
 
                     if not block_processed or not tx_processed:
@@ -74,13 +76,13 @@ async def get_live_chain_data(
 
 
 async def backfill_data(
-    get_missing_data: Callable[[asyncpg.Pool, CosmosChain], Awaitable[List[tuple]]],
+    get_missing_data: Callable[[Database, CosmosChain], Awaitable[List[tuple]]],
     process_missing_data: Callable[
-        [int, CosmosChain, asyncpg.Pool, aiohttp.ClientSession, asyncio.Semaphore],
+        [int, CosmosChain, Database, aiohttp.ClientSession, asyncio.Semaphore],
         Awaitable[None],
     ],
     chain: CosmosChain,
-    pool: asyncpg.Pool,
+    db: Database,
     session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
     log_name: str = "",
@@ -88,7 +90,7 @@ async def backfill_data(
     tasks = []
     start_time = time.time()
     while True:
-        missing_txs_to_query = await get_missing_data(pool, chain)
+        missing_txs_to_query = await get_missing_data(db, chain)
         # print(f"missing {log_name}: {missing_txs_to_query}")
         for min_height_in_db, max_height_in_db in missing_txs_to_query:
             # print(f"processing {log_name} {min_height_in_db} - {max_height_in_db}")
@@ -98,7 +100,7 @@ async def backfill_data(
                 #     f"processing subsection {log_name} {new_min} - {new_min + batch_size}"
                 # )
                 tasks = [
-                    process_missing_data(h, chain, pool, session, sem)
+                    process_missing_data(h, chain, db, session, sem)
                     for h in range(new_min, new_min + batch_size)
                 ]
                 await asyncio.gather(*tasks)
@@ -131,11 +133,16 @@ async def main():
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
     ) as pool:
+
+        schema = os.getenv("INDEXER_SCHEMA", "public")
+
+        db = Database(pool=pool, schema=schema)
+
         # drop tables for testing purposes
         if os.getenv("DROP_TABLES_ON_STARTUP", False):
-            await drop_tables(pool)
+            await drop_tables(db)
 
-        await create_tables(pool)
+        await create_tables(db)
 
         async def handle_tx_notifications(
             notification: asyncpg_listen.NotificationOrTimeout,
@@ -146,21 +153,16 @@ async def main():
             payload = notification.payload
             # print(f"New tx: {payload}")
             txhash, chain_id = payload.split(" ")
-            async with pool.acquire() as conn:
-                data = await conn.fetchrow(
-                    "SELECT raw_log, tx FROM txs WHERE chain_id = $1 AND txhash = $2",
-                    chain_id,
-                    txhash,
-                )
-            raw_logs, raw_tx = data
+
+            raw_logs, raw_tx = await get_tx_raw_log_and_tx(db, chain_id, txhash)
 
             logs = parse_logs(raw_logs, txhash)
             cur_log_cols = set()
             for log in logs:
                 cur_log_cols = cur_log_cols.union(log.get_cols())
 
-            await add_current_log_columns(pool, cur_log_cols)
-            await add_logs(pool, logs)
+            await add_current_log_columns(db, cur_log_cols)
+            await add_logs(db, logs)
 
             # print(f"updated messages for {txhash}")
 
@@ -207,7 +209,7 @@ async def main():
                     get_missing_data=get_missing_blocks,
                     process_missing_data=process_block,
                     chain=chain,
-                    pool=pool,
+                    db=db,
                     session=session,
                     sem=sem,
                     log_name="blocks",
@@ -216,12 +218,12 @@ async def main():
                     get_missing_data=get_missing_txs,
                     process_missing_data=process_tx,
                     chain=chain,
-                    pool=pool,
+                    db=db,
                     session=session,
                     sem=sem,
                     log_name="txs",
                 ),
-                get_live_chain_data(chain, pool, session, sem),
+                get_live_chain_data(chain, db, session, sem),
             ]
 
             await asyncio.gather(*tasks)

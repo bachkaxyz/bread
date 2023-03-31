@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION parse_raw_block() RETURNS TRIGGER AS
 $$ 
     BEGIN
-        INSERT INTO blocks (height, chain_id, time, block_hash, proposer_address)
+        INSERT INTO $schema.blocks (height, chain_id, time, block_hash, proposer_address)
         VALUES (
             NEW.height,
             NEW.chain_id,
@@ -10,14 +10,14 @@ $$
             (NEW.block->'block'->'header'->>'proposer_address')::TEXT
         )
         ON CONFLICT DO NOTHING;
-        NEW.parsed_at := NOW();
+        UPDATE $schema.raw_blocks SET parsed_at = NOW() WHERE chain_id = NEW.chain_id AND height = NEW.height;
         RETURN NEW;
     END
 $$
 LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER raw_block_insert
 AFTER INSERT
-ON raw_blocks
+ON $schema.raw_blocks
 FOR EACH ROW EXECUTE PROCEDURE parse_raw_block();
 
 CREATE OR REPLACE FUNCTION parse_raw_txs() RETURNS TRIGGER AS 
@@ -29,7 +29,7 @@ $$
     BEGIN            
         FOR tx_responses IN SELECT * FROM jsonb_array_elements(NEW.txs) where jsonb_array_length(NEW.txs) > 0
         LOOP
-            INSERT INTO txs (txhash, chain_id, height, tx_response, tx, tx_response_tx_type, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
+            INSERT INTO $schema.txs (txhash, chain_id, height, tx_response, tx, tx_response_tx_type, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
             VALUES (
                 tx_responses->>'txhash',
                 NEW.chain_id,
@@ -53,13 +53,13 @@ $$
             
             PERFORM pg_notify('txs_to_logs', tx_responses->>'txhash' || ' ' || NEW.chain_id);
         END LOOP;
-        NEW.parsed_at := NOW();
+        UPDATE $schema.raw_txs SET parsed_at = NOW() WHERE chain_id = NEW.chain_id AND height = NEW.height;
         RETURN NEW;
     END
 $$ 
 LANGUAGE plpgsql;
 CREATE OR REPLACE TRIGGER raw_tx_insert
 AFTER INSERT
-ON raw_txs
+ON $schema.raw_txs
 FOR EACH ROW EXECUTE PROCEDURE parse_raw_txs();
 
