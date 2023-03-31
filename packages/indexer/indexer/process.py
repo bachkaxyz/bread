@@ -19,11 +19,11 @@ async def process_block(
         block_data = await chain.get_block(session, sem, height)
     try:
         if block_data is not None:
-            if chain.chain_id == block_data["header"]["chain_id"]:
+            if chain.chain_id == block_data["block"]["header"]["chain_id"]:
                 await upsert_raw_blocks(db, block_data)
             else:
                 raise ChainIdMismatchError(
-                    f"chain_id mismatch - {chain.chain_id} - {block_data['header']['chain_id']} - {chain.apis[chain.current_api_index]}"
+                    f"chain_id mismatch - {chain.chain_id} - {block_data['block']['header']['chain_id']} - {chain.apis[chain.current_api_index]}"
                 )
         else:
             raise ChainDataIsNoneError(f"block_data is None - {block_data}")
@@ -31,6 +31,10 @@ async def process_block(
     except ChainDataIsNoneError as e:
         print(f"upsert_block error {repr(e)} - {height}")
         return False
+    except ChainIdMismatchError as e:
+        raise e
+    except Exception as e:
+        raise e
 
 
 async def process_tx(
@@ -53,5 +57,7 @@ async def process_tx(
         print(f"upsert_txs error {repr(e)} - {height}")
         return False
     except KeyError as e:
-        print("tx_responses doesn't exist")
+        print("tx_response key doesn't exist")
         return False
+    except Exception as e:
+        raise e

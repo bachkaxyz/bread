@@ -4,6 +4,7 @@ import aiohttp, asyncio
 import pytest
 from indexer.chain import CosmosChain
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from pytest_mock import MockFixture
 
 
 @pytest.fixture
@@ -21,7 +22,7 @@ def mock_semaphore():
 @pytest.fixture
 def mock_chain():
     apis = (["https://mock_api.com/", "https://mock_api2.com/"],)
-    return CosmosChain(
+    chain = CosmosChain(
         min_block_height=0,
         chain_id="mock_chain_id",
         blocks_endpoint="cosmos/blocks/{}",
@@ -31,10 +32,16 @@ def mock_chain():
         apis_hit=[0 * len(apis)],
         apis_miss=[0 * len(apis)],
     )
+    return chain
 
 
 @pytest.mark.asyncio
-async def test_api_get(mock_semaphore, mock_client, mock_chain):
+async def test_api_get(
+    mock_semaphore: asyncio.Semaphore,
+    mock_client: aiohttp.ClientSession,
+    mock_chain: CosmosChain,
+    mocker: MockFixture,
+):
 
     exp_res = {"block": {"mock_key": "mock_response"}}
 
