@@ -3,6 +3,7 @@ import aiohttp
 import asyncpg
 from indexer.chain import CosmosChain
 from indexer.db import upsert_raw_blocks, upsert_raw_txs
+from indexer.exceptions import ChainDataIsNoneError, ChainIdMismatchError
 
 
 async def process_block(
@@ -18,11 +19,16 @@ async def process_block(
         block_data = await chain.get_block(session, sem, height)
     try:
         if block_data is not None:
-            await upsert_raw_blocks(pool, block_data)
+            if chain.chain_id == block_data["header"]["chain_id"]:
+                await upsert_raw_blocks(pool, block_data)
+            else:
+                raise ChainIdMismatchError(
+                    f"chain_id mismatch - {chain.chain_id} - {block_data['header']['chain_id']} - {chain.apis[chain.current_api_index]}"
+                )
         else:
-            raise Exception(f"block_data is None - {block_data}")
+            raise ChainDataIsNoneError(f"block_data is None - {block_data}")
         return True
-    except Exception as e:
+    except ChainDataIsNoneError as e:
         print(f"upsert_block error {repr(e)} - {height}")
         return False
 
@@ -37,12 +43,15 @@ async def process_tx(
     txs_data = await chain.get_block_txs(session, sem, height)
     try:
         if txs_data is None:
-            raise Exception("txs_data is None")
+            raise ChainDataIsNoneError("txs_data is None")
         else:
             txs_data = txs_data["tx_responses"]
             await upsert_raw_txs(pool, {height: txs_data}, chain.chain_id)
             return True
 
-    except Exception as e:
+    except ChainDataIsNoneError as e:
         print(f"upsert_txs error {repr(e)} - {height}")
+        return False
+    except KeyError as e:
+        print("tx_responses doesn't exist")
         return False

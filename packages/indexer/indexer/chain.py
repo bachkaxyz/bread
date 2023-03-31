@@ -2,6 +2,8 @@ import asyncio, json, traceback, aiohttp
 from dataclasses import dataclass, field
 from typing import List
 
+from indexer.exceptions import APIResponseError
+
 
 @dataclass
 class CosmosChain:
@@ -48,8 +50,8 @@ class CosmosChain:
                             self.apis_hit[self.current_api_index] += 1
                             return await self.get_json(resp)
                         else:
-                            raise Exception("API Response Not Valid")
-            except Exception as e:
+                            raise APIResponseError("API Response Not Valid")
+            except APIResponseError as e:
                 print(f"failed to get {self.apis[self.current_api_index]}{endpoint}")
                 self.apis_miss[self.current_api_index] += 1
                 self.current_api_index = (self.current_api_index + 1) % len(self.apis)

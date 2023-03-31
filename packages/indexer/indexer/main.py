@@ -17,6 +17,7 @@ from indexer.db import (
     upsert_raw_blocks,
     upsert_raw_txs,
 )
+from indexer.exceptions import ProcessChainDataError
 from indexer.parser import Log, parse_logs
 import asyncpg_listen
 from indexer.process import process_block, process_tx
@@ -60,14 +61,14 @@ async def get_live_chain_data(
                     )
 
                     if not block_processed or not tx_processed:
-                        raise Exception(
+                        raise (
                             f"block or tx not processed {block_processed=} {tx_processed=}"
                         )
 
             else:
-                raise Exception("cannot pull block data")
+                raise ProcessChainDataError("cannot pull block data")
 
-        except Exception as e:
+        except ProcessChainDataError as e:
             print(f"live - Failed to get a block {last_block} - {repr(e)}")
             chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
 
