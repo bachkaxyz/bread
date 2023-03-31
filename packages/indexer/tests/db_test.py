@@ -15,7 +15,11 @@ from indexer.db import (
     upsert_raw_blocks,
     upsert_raw_txs,
 )
-from indexer.process import process_block, process_tx, process_tx_notifications
+from indexer.process import (
+    DbNotificationHandler,
+    process_block,
+    process_tx,
+)
 import pytest
 import asyncpg
 import pandas as pd
@@ -48,11 +52,17 @@ async def mock_listener():
 
 
 @pytest.fixture
-async def mock_db(mock_pool: asyncpg.Pool | None):
+async def mock_db(mock_pool: asyncpg.Pool):
     db = Database(pool=mock_pool, schema=os.getenv("INDEXER_SCHEMA", "public"))
     await db.pool.execute(f"CREATE SCHEMA IF NOT EXISTS {db.schema}")
     await drop_tables(db)
     return db
+
+
+@pytest.fixture
+async def mock_notification_handler(mock_db: Database):
+    dbNotifHandler = DbNotificationHandler(mock_db)
+    return dbNotifHandler
 
 
 @pytest.fixture
@@ -108,6 +118,7 @@ async def test_upsert_raw_blocks(
     mock_client: aiohttp.ClientSession,
     mock_semaphore: asyncio.Semaphore,
     raw_blocks: pd.DataFrame,
+    mocker,
 ):
     await create_tables(mock_db)
     for block in raw_blocks["block"][: len(raw_blocks) // 2]:
@@ -170,45 +181,64 @@ async def test_upsert_raw_txs(
     mock_client: aiohttp.ClientSession,
     mock_semaphore: asyncio.Semaphore,
     raw_txs: pd.DataFrame,
+    mock_notification_handler: DbNotificationHandler,
+    mocker,
 ):
     await create_tables(mock_db)
 
-    # task = asyncio.create_task(
-    #     mock_listener.run(
-    #         {"txs_to_logs": process_tx_notifications},
-    #         policy=asyncpg_listen.ListenPolicy.ALL,
-    #     )
-    # )
+    listener_task = asyncio.create_task(
+        mock_listener.run(
+            {"txs_to_logs": mock_notification_handler.process_tx_notifications},
+            policy=asyncpg_listen.ListenPolicy.ALL,
+        )
+    )
 
-    # number_of_txs = 0
-    # flattened_raw_txs = []
-    # for _chain_id, height, txs, _parsed_at in raw_txs[:500].itertuples(index=False):
-    #     number_of_txs += len(txs)
-    #     flattened_raw_txs.extend(txs)
-    #     await upsert_raw_txs(mock_db, {int(height): txs}, mock_chain.chain_id)
+    flattened_raw_txs = []
+    for _chain_id, height, txs, _parsed_at in raw_txs[:500].itertuples(index=False):
+        flattened_raw_txs.extend(txs)
+        await upsert_raw_txs(mock_db, {int(height): txs}, mock_chain.chain_id)
 
-    # for _chain_id, height, txs, _parsed_at in raw_txs[500:].itertuples(index=False):
-    #     number_of_txs += len(txs)
-    #     flattened_raw_txs.extend(txs)
-    #     mock_client.get.return_value.__aenter__.return_value.status = 200
-    #     mock_client.get.return_value.__aenter__.return_value.read.return_value = {
-    #         "tx_responses": json.dumps(txs)
-    #     }
-    #     await process_tx(height, mock_chain, mock_db, mock_client, mock_semaphore)
+    # valid block data
+    for _chain_id, height, txs, _parsed_at in raw_txs[500:].itertuples(index=False):
+        flattened_raw_txs.extend(txs)
+        mocker.patch(
+            "indexer.process.CosmosChain.get_block_txs",
+            return_value={"tx_responses": txs},
+        )
 
-    # async with mock_db.pool.acquire() as conn:
-    #     raw_results = await conn.fetch(
-    #         f"""
-    #         select * from {mock_db.schema}.raw_txs
-    #         """
-    #     )
+        assert True == await process_tx(
+            height, mock_chain, mock_db, mock_client, mock_semaphore
+        )
 
-    #     results = await conn.fetch(
-    #         f"select * from {mock_db.schema}.txs order by height asc"
-    #     )
+    # invalid tx data
+    mocker.patch("indexer.process.CosmosChain.get_block_txs", return_value=None)
+    assert False == await process_tx(
+        height, mock_chain, mock_db, mock_client, mock_semaphore
+    )
 
-    # print(len(results))
-    # txs table
-    # assert len(results) == number_of_txs
+    async with mock_db.pool.acquire() as conn:
+        raw_results = await conn.fetch(
+            f"""
+            select * from {mock_db.schema}.raw_txs
+            """
+        )
+
+        results = await conn.fetch(f"select * from {mock_db.schema}.txs")
+
+    assert len(results) == len(flattened_raw_txs)
+
+    while len(mock_notification_handler.notifications) < len(flattened_raw_txs):
+        await asyncio.sleep(0.1)
+
+    assert len(mock_notification_handler.notifications) == len(flattened_raw_txs)
+    await DbNotificationHandler.cancel_and_wait(listener_task)
 
     await drop_tables(mock_db)
+
+
+async def test_get_missing(mocker):
+    # beginning
+    # dif is of length 1
+    # all caught up
+    # not all caught up
+    pass

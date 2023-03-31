@@ -21,7 +21,11 @@ from indexer.db import (
 )
 from indexer.parser import Log, parse_logs
 import asyncpg_listen
-from indexer.process import process_block, process_tx, process_tx_notifications
+from indexer.process import (
+    DbNotificationHandler,
+    process_block,
+    process_tx,
+)
 
 load_dotenv()
 
@@ -123,11 +127,7 @@ async def on_request_start(session, context, params):
     logging.getLogger("aiohttp.client").debug(f"Starting request <{params}>")
 
 
-db = None
-
-
 async def main():
-    global db
 
     async with asyncpg.create_pool(
         host=os.getenv("POSTGRES_HOST"),
@@ -182,9 +182,11 @@ async def main():
                 time_between_blocks=int(os.getenv("TIME_BETWEEN_BLOCKS", 1)),
             )
 
+            dbNotifHandler = DbNotificationHandler(db)
+
             tasks = [
                 listener.run(
-                    {"txs_to_logs": process_tx_notifications},
+                    {"txs_to_logs": dbNotifHandler.process_tx_notifications},
                     policy=asyncpg_listen.ListenPolicy.ALL,
                 ),
                 backfill_data(
