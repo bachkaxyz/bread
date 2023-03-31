@@ -10,7 +10,7 @@ services:
       - DBT_PROFILES_DIR=./indexer
     env_file:
       - ./../../.env
-    command: poetry run dbt debug --project-dir ./indexer
+    command: poetry run dbt test --project-dir ./indexer
 networks:
   default:
     name: sn-mono-network
