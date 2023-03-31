@@ -10,6 +10,7 @@ x-common-variables:
 services:
   dbt:
     command: poetry run dbt test --project-dir ./indexer
+    environment: *common-variables
     depends_on:
       - dbt_test_postgres
   dbt_test_postgres:
