@@ -138,7 +138,6 @@ async def main():
     ) as pool:
 
         schema = os.getenv("INDEXER_SCHEMA", "public")
-        print(schema)
 
         db = Database(pool=pool, schema=schema)
 
