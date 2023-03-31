@@ -69,6 +69,7 @@ class DbNotificationHandler:
         self,
         notification: NotificationOrTimeout,
     ) -> None:
+
         if isinstance(notification, Timeout):
             return
         self.notifications.append(notification)
@@ -87,8 +88,3 @@ class DbNotificationHandler:
         await add_logs(self.db, logs)
 
         # print(f"updated messages for {txhash}")
-
-    async def cancel_and_wait(future: asyncio.Future[None]) -> None:
-        future.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await future

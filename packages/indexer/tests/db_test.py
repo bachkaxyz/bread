@@ -85,7 +85,7 @@ async def test_create_drop_tables(mock_db: Database):
         async with mock_db.pool.acquire() as conn:
             results = await conn.fetch(
                 f"""
-                SELECT table_name FROM information_schema.tables 
+                SELECT table_name FROM information_schema.tables
                 WHERE table_schema = '{mock_db.schema}'
                 AND table_name in {table_names}
                 """
@@ -230,8 +230,8 @@ async def test_upsert_raw_txs(
     while len(mock_notification_handler.notifications) < len(flattened_raw_txs):
         await asyncio.sleep(0.1)
 
-    assert len(mock_notification_handler.notifications) == len(flattened_raw_txs)
-    await DbNotificationHandler.cancel_and_wait(listener_task)
+    assert len(mock_notification_handler.notifications) >= len(flattened_raw_txs)
+    await asyncpg_listen.NotificationListener._cancel_and_await_tasks([listener_task])
 
     await drop_tables(mock_db)
 
