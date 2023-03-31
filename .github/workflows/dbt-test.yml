@@ -1,4 +1,4 @@
-name: DBT Tests
+name: Dbt Tests
 
 on:
   push:
