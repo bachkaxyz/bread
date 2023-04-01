@@ -21,7 +21,11 @@ from indexer.db import (
 )
 from indexer.parser import Log, parse_logs
 import asyncpg_listen
-from indexer.process import process_block, process_tx
+from indexer.process import (
+    DbNotificationHandler,
+    process_block,
+    process_tx,
+)
 
 load_dotenv()
 
@@ -143,28 +147,6 @@ async def main():
 
         await create_tables(db)
 
-        async def handle_tx_notifications(
-            notification: asyncpg_listen.NotificationOrTimeout,
-        ) -> None:
-            if isinstance(notification, asyncpg_listen.Timeout):
-                return
-
-            payload = notification.payload
-            # print(f"New tx: {payload}")
-            txhash, chain_id = payload.split(" ")
-
-            raw_logs, raw_tx = await get_tx_raw_log_and_tx(db, chain_id, txhash)
-
-            logs = parse_logs(raw_logs, txhash)
-            cur_log_cols = set()
-            for log in logs:
-                cur_log_cols = cur_log_cols.union(log.get_cols())
-
-            await add_current_log_columns(db, cur_log_cols)
-            await add_logs(db, logs)
-
-            # print(f"updated messages for {txhash}")
-
         listener = asyncpg_listen.NotificationListener(
             asyncpg_listen.connect_func(
                 host=os.getenv("POSTGRES_HOST"),
@@ -198,10 +180,12 @@ async def main():
                 apis_miss=[0 for i in range(len(apis))],
                 time_between_blocks=int(os.getenv("TIME_BETWEEN_BLOCKS", 1)),
             )
-            # print(f"chain: {chain.chain_id} min height: {chain.min_block_height}")
+
+            dbNotifHandler = DbNotificationHandler(db)
+
             tasks = [
                 listener.run(
-                    {"txs_to_logs": handle_tx_notifications},
+                    {"txs_to_logs": dbNotifHandler.process_tx_notifications},
                     policy=asyncpg_listen.ListenPolicy.ALL,
                 ),
                 backfill_data(

@@ -40,6 +40,7 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
 
     for msg_index, raw_log in enumerate(raw_logs):  # for each message
         log = Log(txhash=txhash, msg_index=msg_index)
+        log.event_attributes = defaultdict(list)
         # for each event in the message
         for i, event in enumerate(raw_log["events"]):
             updated_log_dic = parse_log_event(event)
