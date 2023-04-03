@@ -131,6 +131,7 @@ async def get_missing_from_raw(db: Database, chain: CosmosChain, table_name: str
             """,
             chain.chain_id,
         )
+        print(rows)
 
     # the above query returns the difference between the two blocks that exists
 

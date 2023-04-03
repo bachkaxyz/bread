@@ -1,9 +1,22 @@
 import asyncio
+import contextlib
+from typing import List
 import aiohttp
 import asyncpg
+from asyncpg_listen import NotificationListener, NotificationOrTimeout, Timeout
+import asyncpg_listen
+from indexer import db
 from indexer.chain import CosmosChain
-from indexer.db import Database, upsert_raw_blocks, upsert_raw_txs
-from indexer.exceptions import ChainDataIsNoneError, ChainIdMismatchError
+from indexer.db import (
+    Database,
+    add_current_log_columns,
+    add_logs,
+    get_tx_raw_log_and_tx,
+    upsert_raw_blocks,
+    upsert_raw_txs,
+)
+from indexer.exceptions import ChainDataIsNoneError
+from indexer.parser import parse_logs
 
 
 async def process_block(
