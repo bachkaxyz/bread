@@ -67,3 +67,34 @@ async def process_tx(
         return False
     except Exception as e:
         raise e
+
+
+class DbNotificationHandler:
+    def __init__(self, db: Database) -> None:
+        self.db = db
+        self.notifications: List[asyncpg_listen.NotificationOrTimeout] = []
+
+    async def process_tx_notifications(
+        self,
+        notification: NotificationOrTimeout,
+    ) -> None:
+
+        if isinstance(notification, Timeout) or notification.payload is None:
+            return
+        self.notifications.append(notification)
+        payload = notification.payload
+
+        # print(f"New tx: {payload}")
+        txhash, chain_id = payload.split(" ")
+
+        raw_logs, raw_tx = await get_tx_raw_log_and_tx(self.db, chain_id, txhash)
+
+        logs = parse_logs(raw_logs, txhash)
+        cur_log_cols = set()
+        for log in logs:
+            cur_log_cols = cur_log_cols.union(log.get_cols())
+
+        await add_current_log_columns(self.db, cur_log_cols)
+        await add_logs(self.db, logs)
+
+        # print(f"updated messages for {txhash}")
