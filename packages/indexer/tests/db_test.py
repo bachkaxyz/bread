@@ -128,21 +128,34 @@ async def test_upsert_raw_blocks(
     for height, _chain_id, block, _parsed_at in raw_blocks[
         len(raw_blocks) // 2 :
     ].itertuples(index=False):
-        mock_client.get.return_value.__aenter__.return_value.status = 200
-        mock_client.get.return_value.__aenter__.return_value.read.return_value = (
-            json.dumps(block)
+        try:
+            # change chain_id to mock chain_id
+            block = json.loads(block)
+            block["block"]["header"]["chain_id"] = mock_chain.chain_id
+            block = json.dumps(block)
+        except:
+            # if block data is none, there is nothing to change
+            pass
+        mocker.patch(
+            "indexer.chain.CosmosChain.get_block", return_value=block
         )
+        if block is not None:
+            assert True == await process_block(
+                height, mock_chain, mock_db, mock_client, mock_semaphore
+            )
+        else:
+            assert False == await process_block(
+                height, mock_chain, mock_db, mock_client, mock_semaphore
+            )
 
-        assert True == await process_block(
-            height, mock_chain, mock_db, mock_client, mock_semaphore
-        )
+        # assert True == await process_block(
+        #     height, mock_chain, mock_db, mock_client, mock_semaphore
+        # )
 
-    # invalid block data
-    mock_client.get.return_value.__aenter__.return_value.status = 200
-    mock_client.get.return_value.__aenter__.return_value.read.return_value = None
+    mocker.patch("indexer.chain.CosmosChain.get_block", return_value=None)
 
     assert False == await process_block(
-        height, mock_chain, mock_db, mock_client, mock_semaphore
+        1, mock_chain, mock_db, mock_client, mock_semaphore
     )
 
     async with mock_db.pool.acquire() as conn:
@@ -196,7 +209,7 @@ async def test_upsert_raw_txs(
     flattened_raw_txs = []
     for _chain_id, height, txs, _parsed_at in raw_txs[:500].itertuples(index=False):
         flattened_raw_txs.extend(txs)
-        await upsert_raw_txs(mock_db, {int(height): txs}, mock_chain.chain_id)
+        await upsert_raw_txs(mock_db, {height: txs}, mock_chain.chain_id)
 
     # valid block data
     for _chain_id, height, txs, _parsed_at in raw_txs[500:].itertuples(index=False):
@@ -213,7 +226,7 @@ async def test_upsert_raw_txs(
     # invalid tx data
     mocker.patch("indexer.process.CosmosChain.get_block_txs", return_value=None)
     assert False == await process_tx(
-        height, mock_chain, mock_db, mock_client, mock_semaphore
+        1, mock_chain, mock_db, mock_client, mock_semaphore
     )
 
     async with mock_db.pool.acquire() as conn:
