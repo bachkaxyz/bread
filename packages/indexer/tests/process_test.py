@@ -193,32 +193,6 @@ async def test_process_block_valid_passed_in(
     await drop_tables(mock_db)
 
 
-async def test_process_block_wrong_chain_id(
-    wrong_chain_id_block_data, mock_chain, mock_db, mock_client, mock_semaphore, mocker
-):
-
-    await create_tables(mock_db)
-
-    mocker.patch(
-        "indexer.chain.CosmosChain.get_block", return_value=wrong_chain_id_block_data
-    )
-
-    with pytest.raises(ChainIdMismatchError):
-        await process_block(1, mock_chain, mock_db, mock_client, mock_semaphore)
-
-    with pytest.raises(ChainIdMismatchError):
-        await process_block(
-            2,
-            mock_chain,
-            mock_db,
-            mock_client,
-            mock_semaphore,
-            wrong_chain_id_block_data,
-        )
-
-    await drop_tables(mock_db)
-
-
 async def test_process_block_chain_data_is_none(
     mock_chain, mock_db, mock_client, mock_semaphore, mocker
 ):

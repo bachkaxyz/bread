@@ -1,4 +1,4 @@
-class ChainDataError(Exception):
+class ChainDataError(BaseException):
     pass
 
 
@@ -14,5 +14,5 @@ class APIResponseError(ChainDataError):
     pass
 
 
-class ProcessChainDataError(Exception):
+class ProcessChainDataError(BaseException):
     pass

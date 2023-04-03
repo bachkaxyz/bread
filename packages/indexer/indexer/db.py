@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 import json
 import os
-from typing import Dict, List, Tuple
+from typing import Dict, List, Set, Tuple
 
 from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
@@ -64,7 +64,7 @@ async def upsert_raw_blocks(db: Database, block: dict):
             VALUES ($1, $2, $3)
             """,
             chain_id,
-            height,
+            int(height),
             json.dumps(block),
         )
 
@@ -79,12 +79,12 @@ async def upsert_raw_txs(db: Database, txs: Dict[str, List[dict]], chain_id: str
                     VALUES ($1, $2, $3)
                     """,
                     chain_id,
-                    height,
+                    int(height),
                     json.dumps(tx) if len(tx) > 0 else None,
                 )
 
 
-async def add_current_log_columns(db: Database, new_cols: List[tuple[str, str]]):
+async def add_current_log_columns(db: Database, new_cols: Set[tuple[str, str]]):
     async with db.pool.acquire() as conn:
         async with conn.transaction():
             for i, row in enumerate(new_cols):
