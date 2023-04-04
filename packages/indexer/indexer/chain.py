@@ -147,7 +147,6 @@ class CosmosChain:
         if self.chain_id == data["block"]["header"]["chain_id"]:
             return data
 
-        print(api_res)
         self.remove_api(api)
         return None
 

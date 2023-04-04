@@ -32,7 +32,6 @@ async def get_table_cols(db: Database, table_name: str):
             db.schema,
             table_name,
         )
-        print(cols)
         return [col["column_name"] for col in cols]
 
 
@@ -131,7 +130,6 @@ async def get_missing_from_raw(db: Database, chain: CosmosChain, table_name: str
             """,
             chain.chain_id,
         )
-        print(rows)
 
     # the above query returns the difference between the two blocks that exists
 
