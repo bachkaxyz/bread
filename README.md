@@ -31,6 +31,10 @@ This is the api that serves the data to the dashboard. It is a rest api that is 
 
 This is the dashboard that is built with [dash](https://dash.plotly.com/) and deployed here [https:/secretanalytics.xyz](https:/secretanalytics.xyz)
 
+### `packages/indexer`
+
+This our a custom written indexer that queries different tendermint endpoints and loads the data into our postgres database
+
 ## Current Development Status
 
 We are currently in the process of migrating from multiple old repos to this new one:
@@ -152,7 +156,13 @@ poetry new ./packages/<project-name>
 Then in the the root `pyproject.toml` file, add the new project to the `packages` section like so:
 
 ```toml
-project-name = { path = "./packages/<project-name>", develop = true, extras = ["dev"] }}`
+project-name = { path = "./packages/<project-name>", develop = true, extras = ["dev"] }`
 ```
 
 extras = ["dev"] is optional, but it will install the dev dependencies for that project, so for airflow we do this because we need the dev dependencies for the `airflow` package for IDE support.
+
+## To add support for a new chain
+
+1. Create new branch off of main
+2. Add branch name to deploy github action
+3. Setup GCP Cloud Run and Compute Instances for indexer, api, and dashboard
