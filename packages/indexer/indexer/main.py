@@ -3,7 +3,7 @@ import asyncio, aiohttp, json, asyncpg, os
 import sys
 import time
 import logging
-from typing import Awaitable, Callable, List
+from typing import Any, Awaitable, Callable, Coroutine, List
 from dotenv import load_dotenv
 from indexer.chain import CosmosChain
 from indexer.db import (
@@ -19,6 +19,7 @@ from indexer.db import (
     upsert_raw_txs,
     Database,
 )
+from indexer.exceptions import ChainDataIsNoneError, ProcessChainDataError
 from indexer.parser import Log, parse_logs
 import asyncpg_listen
 from indexer.process import (
@@ -44,45 +45,45 @@ async def get_live_chain_data(
     while True:
         try:
             block_data = await chain.get_block(session, sem)
-            if block_data is not None:
-                current_block = int(block_data["block"]["header"]["height"])
-                # print(f"current block - {current_block}")
-                if last_block >= current_block:
-                    await asyncio.sleep(chain.time_between_blocks)
-                else:
-                    last_block = current_block
+            if block_data is None:
+                raise ChainDataIsNoneError("block data is None")
 
-                    block_processed = await process_block(
-                        chain=chain,
-                        height=current_block,
-                        db=db,
-                        session=session,
-                        sem=sem,
-                        block_data=block_data,
-                    )
-
-                    tx_processed = await process_tx(
-                        current_block, chain, db, session, sem
-                    )
-
-                    if not block_processed or not tx_processed:
-                        raise Exception(
-                            f"block or tx not processed {block_processed=} {tx_processed=}"
-                        )
-
+            current_block = int(block_data["block"]["header"]["height"])
+            # print(f"current block - {current_block}")
+            if last_block >= current_block:
+                await asyncio.sleep(chain.time_between_blocks)
             else:
-                raise Exception("cannot pull block data")
+                last_block = current_block
 
-        except Exception as e:
-            print(f"live - Failed to get a block {last_block} - {repr(e)}")
-            chain.current_api_index = (chain.current_api_index + 1) % len(chain.apis)
+                is_block_processed = await process_block(
+                    chain=chain,
+                    height=current_block,
+                    db=db,
+                    session=session,
+                    sem=sem,
+                    block_data=block_data,
+                )
+
+                is_tx_processed = await process_tx(
+                    current_block, chain, db, session, sem
+                )
+
+                if not is_block_processed or not is_tx_processed:
+                    raise ProcessChainDataError(
+                        f"block or tx not processed {is_block_processed=} {is_tx_processed=}"
+                    )
+
+        except ProcessChainDataError as e:
+            print(f"live - failed to process block - {last_block} - {repr(e)}")
+        except ChainDataIsNoneError as e:
+            print(f"live - chain data is none - {last_block} - {repr(e)}")
 
 
 async def backfill_data(
     get_missing_data: Callable[[Database, CosmosChain], Awaitable[List[tuple]]],
     process_missing_data: Callable[
         [int, CosmosChain, Database, aiohttp.ClientSession, asyncio.Semaphore],
-        Awaitable[None],
+        Coroutine[Any, Any, bool],
     ],
     chain: CosmosChain,
     db: Database,
@@ -169,15 +170,15 @@ async def main():
             raw_apis = raw_chain["apis"]["rest"]
             apis = os.getenv("APIS").split(",") + [api["address"] for api in raw_apis]
 
+            chain_apis = {api: {"hit": 0, "miss": 0} for api in apis}
+
             chain = CosmosChain(
                 chain_id=raw_chain["chain_id"],
                 min_block_height=int(os.getenv("MIN_BLOCK_HEIGHT")),
                 blocks_endpoint=os.getenv("BLOCKS_ENDPOINT"),
                 txs_endpoint=os.getenv("TXS_ENDPOINT"),
                 txs_batch_endpoint=os.getenv("TXS_BATCH_ENDPOINT"),
-                apis=apis,
-                apis_hit=[0 for i in range(len(apis))],
-                apis_miss=[0 for i in range(len(apis))],
+                apis=chain_apis,
                 time_between_blocks=int(os.getenv("TIME_BETWEEN_BLOCKS", 1)),
             )
 
