@@ -14,5 +14,9 @@ class APIResponseError(ChainDataError):
     pass
 
 
+class BlockNotParsedError(ChainDataError):
+    pass
+
+
 class ProcessChainDataError(BaseException):
     pass
