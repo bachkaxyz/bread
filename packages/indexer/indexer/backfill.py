@@ -8,11 +8,10 @@ from aiohttp import ClientResponse, ClientSession
 import aiohttp
 from asyncpg import create_pool, Connection
 from indexer.exceptions import APIResponseError, BlockNotParsedError
-from indexer.parser import Log, parse_logs
+from indexer.parser import Log, Raw, parse_logs
 from datetime import datetime
 
-from indexer.live import _get, block_endpoint, tx_endpoint, base_api, upsert_data
-from indexer.data import Raw
+from indexer.live import _get, block_endpoint, tx_endpoint, base_api
 
 min_block_height = 116001
 
@@ -91,7 +90,7 @@ async def main():
                                 async with pool.acquire() as conn2:
                                     for res in results:
                                         if res:
-                                            await upsert_data(conn2, res)
+                                            await res.upsert_data(conn2)
                                 print("data upserted")
                                 current_height = query_lower_bound
 

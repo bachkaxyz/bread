@@ -52,7 +52,6 @@ $$
         LOOP
             EXECUTE 'UPDATE $schema.logs SET ' || row.column_name ||' = parsed->' || quote_literal(row.column_name) || ', updated_at=NOW() WHERE txhash =' || quote_literal(NEW.txhash) || ' AND msg_index =' || quote_literal(NEW.msg_index::TEXt) || ';';
         END LOOP;
-        UPDATE $schema.txs SET logs_parsed_at = NOW() WHERE txhash = NEW.txhash;
         RETURN NEW;
     END
 $$

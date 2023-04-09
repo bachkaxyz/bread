@@ -42,11 +42,6 @@ async def create_tables(db: Database):
         with open(file_path, "r") as f:
             await conn.execute(f.read().replace("$schema", db.schema))
 
-        # create the parse_raw function on insert trigger of raw
-        file_path = os.path.join(cur_dir, "sql/parse_raw.sql")
-        with open(file_path, "r") as f:
-            await conn.execute(f.read().replace("$schema", db.schema))
-
         file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
         with open(file_path, "r") as f:
             await conn.execute(f.read().replace("$schema", db.schema))

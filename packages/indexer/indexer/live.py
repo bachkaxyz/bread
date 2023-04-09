@@ -10,7 +10,6 @@ import datetime
 from indexer.exceptions import APIResponseError
 
 from indexer.parser import parse_logs
-from indexer.data import Raw
 
 base_api = "https://m-jackal.api.utsa.tech"
 block_endpoint = "/cosmos/base/tendermint/v1beta1/blocks/{}"
@@ -161,59 +160,7 @@ async def main():
                     print(f"new height {raw.height=}")
                     async with pool.acquire() as conn:
                         async with conn.transaction():
-                            await upsert_data(conn, raw)
-
-
-async def upsert_data(conn: Connection, data: Raw):
-    if not (data.height is None or data.chain_id is None or data.block is None):
-        await conn.execute(
-            f"""
-            INSERT INTO raw(chain_id, height, block, block_tx_count, tx_responses, tx_tx_count)
-            VALUES ($1, $2, $3, $4, $5, $6);
-            """,
-            *data.get_raw_db_params(),
-        )
-
-        await conn.execute(
-            """
-            INSERT INTO blocks(chain_id, height, time, block_hash, proposer_address)
-            VALUES ($1, $2, $3, $4, $5);
-            """,
-            *data.block.get_db_params(),
-        )
-        await conn.executemany(
-            """
-            INSERT INTO txs(txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
-            VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-            )
-            """,
-            data.get_txs_db_params(),
-        )
-
-        await conn.executemany(
-            f"""
-            INSERT INTO log_columns (event, attribute)
-            VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
-            """,
-            data.get_log_columns_db_params(),
-        )
-
-        await conn.executemany(
-            f"""
-            INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
-            VALUES (
-                $1, $2, $3, $4, $5
-            )
-            """,
-            data.get_logs_db_params(),
-        )
-
-        print(f"{data.height=} inserted")
-
-    else:
-        print(f"{data.height} {data.chain_id} {data.block}")
+                            await raw.upsert_data(conn)
 
 
 async def get_data_live(session: ClientSession, current_height: int) -> Raw | None:

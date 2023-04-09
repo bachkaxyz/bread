@@ -5,6 +5,7 @@ import json
 import time
 from typing import List, Tuple
 from base64 import b64decode, b64encode
+from asyncpg import Connection
 
 from indexer.exceptions import BlockNotParsedError
 
@@ -231,6 +232,57 @@ class Raw:
 
     def get_logs_db_params(self):
         return [log.get_log_db_params() for log in self.logs]
+
+    async def upsert_data(self, conn: Connection):
+        if not (self.height is None or self.chain_id is None or self.block is None):
+            await conn.execute(
+                f"""
+                INSERT INTO raw(chain_id, height, block, block_tx_count, tx_responses, tx_tx_count)
+                VALUES ($1, $2, $3, $4, $5, $6);
+                """,
+                *self.get_raw_db_params(),
+            )
+
+            await conn.execute(
+                """
+                INSERT INTO blocks(chain_id, height, time, block_hash, proposer_address)
+                VALUES ($1, $2, $3, $4, $5);
+                """,
+                *self.block.get_db_params(),
+            )
+            await conn.executemany(
+                """
+                INSERT INTO txs(txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
+                VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+                )
+                """,
+                self.get_txs_db_params(),
+            )
+
+            await conn.executemany(
+                f"""
+                INSERT INTO log_columns (event, attribute)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+                """,
+                self.get_log_columns_db_params(),
+            )
+
+            await conn.executemany(
+                f"""
+                INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
+                VALUES (
+                    $1, $2, $3, $4, $5
+                )
+                """,
+                self.get_logs_db_params(),
+            )
+
+            print(f"{self.height=} inserted")
+
+        else:
+            print(f"{self.height} {self.chain_id} {self.block}")
 
 
 # def flatten_msg(msg: dict):
