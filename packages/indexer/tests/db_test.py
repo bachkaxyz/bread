@@ -14,7 +14,7 @@ from indexer.db import (
 import pytest
 from asyncpg import Connection, Pool, create_pool
 import pandas as pd
-from .chain_test import mock_chain, mock_client, mock_semaphore
+from .chain_test import mock_chain, mock_client
 
 
 @pytest.fixture

@@ -4,7 +4,6 @@ import aiohttp, asyncio
 import pytest
 from indexer.chain import CosmosChain
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
-from pytest_mock import MockFixture
 
 
 @pytest.fixture
@@ -15,11 +14,6 @@ def mock_client():
 
 
 @pytest.fixture
-def mock_semaphore():
-    return AsyncMock(spec=asyncio.Semaphore)
-
-
-@pytest.fixture
 def mock_chain():
 
     apis = {
@@ -27,21 +21,17 @@ def mock_chain():
         "https://mock_api2.com/": {"hit": 0, "miss": 0},
     }
     chain = CosmosChain(
-        min_block_height=0,
         chain_id="mock_chain_id",
         blocks_endpoint="cosmos/blocks/{}",
         txs_endpoint="cosmos/txs/{}",
-        txs_batch_endpoint="cosmos/txs?minHeight={}&maxHeight={}",
         apis=apis,
     )
     return chain
 
 
 async def test_api_get(
-    mock_semaphore: asyncio.Semaphore,
     mock_client: aiohttp.ClientSession,
     mock_chain: CosmosChain,
-    mocker: MockFixture,
 ):
 
     exp_res = {"block": {"mock_key": "mock_response"}}
@@ -52,12 +42,11 @@ async def test_api_get(
     )
 
     async with aiohttp.ClientSession() as session:
-        result = await mock_chain.get_block_txs(session, mock_semaphore, "1")
+        result = await mock_chain.get_block_txs(session, "1")
         assert exp_res == result
 
 
 async def test_api_get_wrong_status(
-    mock_semaphore: asyncio.Semaphore,
     mock_client: aiohttp.ClientSession,
     mock_chain: CosmosChain,
 ):
@@ -69,12 +58,11 @@ async def test_api_get_wrong_status(
     )
 
     async with aiohttp.ClientSession() as session:
-        result = await mock_chain.get_block_txs(session, mock_semaphore, "1")
+        result = await mock_chain.get_block_txs(session, "1")
         assert None == result
 
 
 async def test_api_get_invalid_keys(
-    mock_semaphore: asyncio.Semaphore,
     mock_client: aiohttp.ClientSession,
     mock_chain: CosmosChain,
 ):
@@ -86,9 +74,7 @@ async def test_api_get_invalid_keys(
         exp_res
     )
 
-    async with aiohttp.ClientSession() as session:
-        result = await mock_chain.get_batch_txs(session, mock_semaphore, "0", "100")
-        assert None == result
+    assert True == False
 
 
 async def test_api_get_invalid_json(mock_semaphore, mock_client, mock_chain):
@@ -106,7 +92,6 @@ async def test_api_get_invalid_json(mock_semaphore, mock_client, mock_chain):
 
 
 async def test_block_get_wrong_chain(
-    mock_semaphore: asyncio.Semaphore,
     mock_client: aiohttp.ClientSession,
     mock_chain: CosmosChain,
 ):
@@ -117,14 +102,13 @@ async def test_block_get_wrong_chain(
     )
 
     async with aiohttp.ClientSession() as session:
-        result = await mock_chain.get_block(session, mock_semaphore)
+        result = await mock_chain.get_block(session)
         assert None == result
 
     assert None == mock_chain.remove_api("doesn't matter")
 
 
 async def test_valid_block_valid_chain(
-    mock_semaphore: asyncio.Semaphore,
     mock_client: aiohttp.ClientSession,
     mock_chain: CosmosChain,
 ):
@@ -135,5 +119,5 @@ async def test_valid_block_valid_chain(
     )
 
     async with aiohttp.ClientSession() as session:
-        result = await mock_chain.get_block(session, mock_semaphore)
+        result = await mock_chain.get_block(session)
         assert exp_res == result
