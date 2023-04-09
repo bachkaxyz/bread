@@ -100,7 +100,7 @@ class Raw:
             proposer_address=proposer_address,
         )
 
-    def parse_tx_responses(self, raw_tx_responses: dict):
+    def parse_tx_responses(self, raw_tx_responses: List[dict]):
         self.raw_tx = raw_tx_responses
         self.tx_responses_tx_count = len(raw_tx_responses)
         if self.block and self.chain_id:

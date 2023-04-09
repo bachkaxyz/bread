@@ -11,8 +11,8 @@ from indexer.exceptions import APIResponseError, BlockNotParsedError
 from indexer.parser import Log, parse_logs
 from datetime import datetime
 
-from indexer.round_2 import _get, block_endpoint, tx_endpoint, base_api, upsert_data
-from indexer.round_2_types import Raw
+from indexer.live import _get, block_endpoint, tx_endpoint, base_api, upsert_data
+from indexer.data import Raw
 
 min_block_height = 116001
 

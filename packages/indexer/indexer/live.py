@@ -10,7 +10,7 @@ import datetime
 from indexer.exceptions import APIResponseError
 
 from indexer.parser import parse_logs
-from indexer.round_2_types import Raw
+from indexer.data import Raw
 
 base_api = "https://m-jackal.api.utsa.tech"
 block_endpoint = "/cosmos/base/tendermint/v1beta1/blocks/{}"
