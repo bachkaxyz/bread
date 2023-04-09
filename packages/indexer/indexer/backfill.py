@@ -7,30 +7,33 @@ from typing import Coroutine, List, Set, Tuple
 from aiohttp import ClientResponse, ClientSession
 import aiohttp
 from asyncpg import create_pool, Connection
+from indexer.chain import CosmosChain, get_chain_from_environment
+from indexer.db import missing_blocks_cursor
 from indexer.exceptions import APIResponseError, BlockNotParsedError
 from indexer.parser import Log, Raw, parse_logs
 from datetime import datetime
-
-from indexer.live import _get, block_endpoint, tx_endpoint, base_api
 
 min_block_height = 116001
 
 
 async def main():
+    schema_name = os.getenv("INDEXER_SCHEMA", "public")
     async with create_pool(
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
+        server_settings={"search_path": schema_name},
     ) as pool:
         async with ClientSession() as session:
+            chain = await get_chain_from_environment(session)
             while True:
-                async with pool.acquire() as conn:
-                    conn: Connection
+                async with pool.acquire() as cursor_conn:
+                    cursor_conn: Connection
 
-                    async with conn.transaction():
-                        wrong_txs = await conn.execute(
+                    async with cursor_conn.transaction():
+                        wrong_txs = await cursor_conn.execute(
                             """
                             select height
                             from raw
@@ -40,25 +43,15 @@ async def main():
                         if len(wrong_txs) == 0:
                             print("no wrong txs")
                         await asyncio.sleep(2)
-                        async for record in conn.cursor(
-                            """
-                            select height, difference_per_block from (
-                                select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
-                                from raw
-                                where chain_id = 'jackal-1'
-                            ) as dif
-                            where difference_per_block <> 1
-                            order by height desc
-                            """
-                        ):
 
+                        async for record in missing_blocks_cursor(cursor_conn, chain):
                             height, dif = record
                             print(f"{height=} {dif=}")
                             if dif == -1:
                                 print("min block in db")
 
-                                lowest_height = await get_lowest_height(
-                                    session, base_api, block_endpoint
+                                lowest_height = await chain.get_lowest_height(
+                                    session
                                 )
 
                                 if height - 20 > lowest_height:
@@ -81,7 +74,7 @@ async def main():
                                 )
                                 results = await asyncio.gather(
                                     *[
-                                        get_data_historical(session, h)
+                                        get_data_historical(session, chain, h)
                                         for h in range(
                                             current_height, query_lower_bound, -1
                                         )
@@ -95,17 +88,20 @@ async def main():
                                 current_height = query_lower_bound
 
 
-async def get_data_historical(session: ClientSession, height: int) -> Raw | None:
+async def get_data_historical(session: ClientSession, chain:CosmosChain,  height: int) -> Raw | None:
     raw = Raw()
     print(f"pulling new data {height}")
-    block_res_json = await _get(base_api, block_endpoint.format(height), session)
+    block_res_json = await chain.get_block(session, height=height)
     print(f"block returned {height}")
     if block_res_json is not None:
         raw.parse_block(block_res_json)
-        if raw.block:
+        if raw.block and raw.height:
             if raw.block_tx_count > 0:
                 print(f"getting tx {height}")
-                tx_res_json = await _get(base_api, tx_endpoint.format(height), session)
+                tx_res_json = await chain.get_block_txs(
+                    session=session,
+                    height=raw.height,
+                )
                 print(f"returned tx {height}")
                 if tx_res_json is not None and "tx_responses" in tx_res_json:
                     tx_responses = tx_res_json["tx_responses"]
@@ -127,15 +123,6 @@ async def get_data_historical(session: ClientSession, height: int) -> Raw | None
             print("block data is None")
             return None
     return raw
-
-
-async def get_lowest_height(session: ClientSession, base_api: str, endpoint: str):
-    block_res = await session.get(base_api + endpoint.format(1))
-    block_res_json = await block_res.json()
-    lowest_height = (
-        block_res_json["message"].split("height is ")[-1].split(":")[0].lstrip()
-    )
-    return int(lowest_height)
 
 
 if __name__ == "__main__":

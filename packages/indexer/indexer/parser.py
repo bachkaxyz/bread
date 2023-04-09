@@ -46,12 +46,13 @@ class Log:
 
 def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
     logs: List[Log] = []
+    json_raw_logs: dict = {}
     try:  # try to parse the logs as json, if it fails, it's a string error message (i dont like this but....)
-        raw_logs = json.loads(raw_logs)
+        json_raw_logs = json.loads(raw_logs)
     except:
         return [Log(txhash, failed=True, failed_msg=raw_logs)]
 
-    for msg_index, raw_log in enumerate(raw_logs):  # for each message
+    for msg_index, raw_log in enumerate(json_raw_logs):  # for each message
         log = Log(txhash=txhash, msg_index=msg_index)
         log.event_attributes = defaultdict(list)
         # for each event in the message

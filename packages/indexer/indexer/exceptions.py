@@ -20,3 +20,7 @@ class BlockNotParsedError(ChainDataError):
 
 class ProcessChainDataError(BaseException):
     pass
+
+
+class EnvironmentError(BaseException):
+    pass
