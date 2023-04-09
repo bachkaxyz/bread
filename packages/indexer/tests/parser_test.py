@@ -2,7 +2,6 @@ import json
 from typing import List
 from indexer.parser import Log, parse_log_event, parse_logs
 import pytest
-from pytest_mock import MockerFixture
 
 
 @pytest.fixture(scope="module")

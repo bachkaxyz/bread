@@ -3,66 +3,36 @@ from datetime import datetime
 import json
 import os
 from typing import Dict
-import aiohttp
-import asyncpg_listen
+from aiohttp import ClientSession
 from indexer.chain import CosmosChain
 from indexer.db import (
-    Database,
     create_tables,
     drop_tables,
-    get_missing_blocks,
-    get_table_cols,
-    upsert_raw_blocks,
-    upsert_raw_txs,
 )
-from indexer.process import (
-    DbNotificationHandler,
-    process_block,
-    process_tx,
-)
+
+
 import pytest
-import asyncpg
+from asyncpg import Connection, Pool, create_pool
 import pandas as pd
 from .chain_test import mock_chain, mock_client, mock_semaphore
 
 
 @pytest.fixture
-async def mock_pool():
-    pool = await asyncpg.create_pool(
+def mock_schema():
+    return "public"
+
+
+@pytest.fixture
+async def mock_pool(mock_schema):
+    pool = await create_pool(
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
+        server_settings={"search_path": mock_schema},
     )
     return pool
-
-
-@pytest.fixture
-async def mock_listener():
-    return asyncpg_listen.NotificationListener(
-        asyncpg_listen.connect_func(
-            host=os.getenv("POSTGRES_HOST"),
-            port=os.getenv("POSTGRES_PORT"),
-            user=os.getenv("POSTGRES_USER"),
-            password=os.getenv("POSTGRES_PASSWORD"),
-            database=os.getenv("POSTGRES_DB"),
-        )
-    )
-
-
-@pytest.fixture
-async def mock_db(mock_pool: asyncpg.Pool):
-    db = Database(pool=mock_pool, schema=os.getenv("INDEXER_SCHEMA", "public"))
-    await db.pool.execute(f"CREATE SCHEMA IF NOT EXISTS {db.schema}")
-    await drop_tables(db)
-    return db
-
-
-@pytest.fixture
-async def mock_notification_handler(mock_db: Database):
-    dbNotifHandler = DbNotificationHandler(mock_db)
-    return dbNotifHandler
 
 
 @pytest.fixture
@@ -80,136 +50,94 @@ def raw_txs():
 
 
 @pytest.mark.asyncio
-async def test_create_drop_tables(mock_db: Database):
-    async def check_tables(mock_db: Database, table_names) -> int:
-        async with mock_db.pool.acquire() as conn:
+async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
+    async def check_tables(table_names) -> int:
+        async with mock_pool.acquire() as conn:
             results = await conn.fetch(
                 f"""
                 SELECT table_name FROM information_schema.tables
-                WHERE table_schema = '{mock_db.schema}'
+                WHERE table_schema = '{mock_schema}'
                 AND table_name in {table_names}
                 """
             )
         return len(results)
 
-    await create_tables(mock_db)
+    async with mock_pool.acquire() as conn:
+        await create_tables(conn, mock_schema)
 
     table_names = ("raw_blocks", "raw_txs", "blocks", "txs", "logs", "log_columns")
 
-    assert await check_tables(mock_db, table_names) == len(table_names)
+    assert await check_tables(table_names) == len(table_names)
 
-    assert await get_table_cols(mock_db, "blocks") == [
-        "height",
-        "chain_id",
-        "time",
-        "block_hash",
-        "proposer_address",
-    ]
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
 
-    await drop_tables(mock_db)
-
-    assert await check_tables(mock_db, table_names) == 0
+    assert await check_tables(table_names) == 0
 
 
 @pytest.mark.asyncio
 async def test_upsert_raw_blocks(
-    mock_db: Database,
+    mock_pool: Pool,
+    mock_schema: str,
     mock_chain: CosmosChain,
-    mock_client: aiohttp.ClientSession,
+    mock_client: ClientSession,
     mock_semaphore: asyncio.Semaphore,
     raw_blocks: pd.DataFrame,
     mocker,
 ):
-    await create_tables(mock_db)
-    for block in raw_blocks["block"][: len(raw_blocks) // 2]:
-        await upsert_raw_blocks(mock_db, block)
+    async with mock_pool.acquire() as conn:
+        await create_tables(conn, mock_schema)
+    # for block in raw_blocks["block"][: len(raw_blocks) // 2]:
+    #     await upsert_raw_blocks(mock_pool, block)
 
     # valid process block
     for height, _chain_id, block, _parsed_at in raw_blocks[
         len(raw_blocks) // 2 :
     ].itertuples(index=False):
-        try:
-            # change chain_id to mock chain_id
-            block = json.loads(block)
-            block["block"]["header"]["chain_id"] = mock_chain.chain_id
-            block = json.dumps(block)
-        except:
-            # if block data is none, there is nothing to change
-            pass
-        mocker.patch(
-            "indexer.chain.CosmosChain.get_block", return_value=block
-        )
-        if block is not None:
-            assert True == await process_block(
-                height, mock_chain, mock_db, mock_client, mock_semaphore
-            )
-        else:
-            assert False == await process_block(
-                height, mock_chain, mock_db, mock_client, mock_semaphore
-            )
+        assert True == False  # should test parsing blocks
 
         # assert True == await process_block(
-        #     height, mock_chain, mock_db, mock_client, mock_semaphore
+        #     height, mock_chain, mock_pool, mock_client, mock_semaphore
         # )
 
-    mocker.patch("indexer.chain.CosmosChain.get_block", return_value=None)
+    #     results = await conn.fetch(f"select * from {mock_pool.schema}.blocks")
 
-    assert False == await process_block(
-        1, mock_chain, mock_db, mock_client, mock_semaphore
-    )
+    # assert len(raw_results) == len(raw_blocks)
+    # assert len(results) == len(raw_blocks)
 
-    async with mock_db.pool.acquire() as conn:
-        raw_results = await conn.fetch(
-            f"""
-            select * from {mock_db.schema}.raw_blocks
-            """
-        )
+    # for block, res in zip(raw_blocks["block"], raw_results):
+    #     assert int(res["height"]) == int(block["block"]["header"]["height"])
+    #     assert res["chain_id"] == block["block"]["header"]["chain_id"]
 
-        results = await conn.fetch(f"select * from {mock_db.schema}.blocks")
+    # for block, res in zip(raw_blocks["block"], results):
+    #     assert int(res["height"]) == int(block["block"]["header"]["height"])
+    #     assert res["chain_id"] == block["block"]["header"]["chain_id"]
+    #     # assert res["time"] == datetime.strptime(
+    #     #     block["block"]["header"]["time"], "%Y-%m-%dT%H:%M:%S.%fZ"
+    #     # )
+    #     assert res["block_hash"] == block["block_id"]["hash"]
+    #     assert res["proposer_address"] == block["block"]["header"]["proposer_address"]
 
-    assert len(raw_results) == len(raw_blocks)
-    assert len(results) == len(raw_blocks)
-
-    for block, res in zip(raw_blocks["block"], raw_results):
-        assert int(res["height"]) == int(block["block"]["header"]["height"])
-        assert res["chain_id"] == block["block"]["header"]["chain_id"]
-
-    for block, res in zip(raw_blocks["block"], results):
-        assert int(res["height"]) == int(block["block"]["header"]["height"])
-        assert res["chain_id"] == block["block"]["header"]["chain_id"]
-        # assert res["time"] == datetime.strptime(
-        #     block["block"]["header"]["time"], "%Y-%m-%dT%H:%M:%S.%fZ"
-        # )
-        assert res["block_hash"] == block["block_id"]["hash"]
-        assert res["proposer_address"] == block["block"]["header"]["proposer_address"]
-
-    await drop_tables(mock_db)
+    # await drop_tables(mock_pool)
 
 
 @pytest.mark.asyncio
 async def test_upsert_raw_txs(
-    mock_db: Database,
-    mock_listener: asyncpg_listen.NotificationListener,
+    mock_pool: Pool,
+    mock_schema: str,
     mock_chain: CosmosChain,
-    mock_client: aiohttp.ClientSession,
+    mock_client: ClientSession,
     mock_semaphore: asyncio.Semaphore,
     raw_txs: pd.DataFrame,
-    mock_notification_handler: DbNotificationHandler,
     mocker,
 ):
-    await create_tables(mock_db)
-
-    listener_task = asyncio.create_task(
-        mock_listener.run(
-            {"txs_to_logs": mock_notification_handler.process_tx_notifications},
-            policy=asyncpg_listen.ListenPolicy.ALL,
-        )
-    )
+    async with mock_pool.acquire() as conn:
+        await create_tables(conn, mock_schema)
 
     flattened_raw_txs = []
     for _chain_id, height, txs, _parsed_at in raw_txs[:500].itertuples(index=False):
         flattened_raw_txs.extend(txs)
-        await upsert_raw_txs(mock_db, {height: txs}, mock_chain.chain_id)
+        # await upsert_raw_txs(mock_pool, {height: txs}, mock_chain.chain_id)
 
     # valid block data
     for _chain_id, height, txs, _parsed_at in raw_txs[500:].itertuples(index=False):
@@ -219,34 +147,25 @@ async def test_upsert_raw_txs(
             return_value={"tx_responses": txs},
         )
 
-        assert True == await process_tx(
-            height, mock_chain, mock_db, mock_client, mock_semaphore
-        )
+        assert True == False
 
     # invalid tx data
     mocker.patch("indexer.process.CosmosChain.get_block_txs", return_value=None)
-    assert False == await process_tx(
-        1, mock_chain, mock_db, mock_client, mock_semaphore
-    )
+    assert False == True
 
-    async with mock_db.pool.acquire() as conn:
+    async with mock_pool.acquire() as conn:
         raw_results = await conn.fetch(
             f"""
-            select * from {mock_db.schema}.raw_txs
+            select * from {mock_schema}.raw_txs
             """
         )
 
-        results = await conn.fetch(f"select * from {mock_db.schema}.txs")
+        results = await conn.fetch(f"select * from {mock_schema}.txs")
 
     assert len(results) == len(flattened_raw_txs)
 
-    while len(mock_notification_handler.notifications) < len(flattened_raw_txs):
-        await asyncio.sleep(0.1)
-
-    assert len(mock_notification_handler.notifications) >= len(flattened_raw_txs)
-    await asyncpg_listen.NotificationListener._cancel_and_await_tasks([listener_task])
-
-    await drop_tables(mock_db)
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
 
 
 async def test_get_missing(mocker):
