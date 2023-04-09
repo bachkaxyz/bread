@@ -7,13 +7,16 @@ import asyncio
 from base64 import b64decode
 from asyncpg import create_pool, Connection
 import datetime
+from indexer.db import create_tables
 from indexer.exceptions import APIResponseError
 
-from indexer.parser import parse_logs
+from indexer.parser import Raw, parse_logs
 
-base_api = "https://m-jackal.api.utsa.tech"
-block_endpoint = "/cosmos/base/tendermint/v1beta1/blocks/{}"
-tx_endpoint = "/cosmos/tx/v1beta1/txs?events=tx.height={}"
+base_api = "https://jackal.nodejumper.io:1317"
+block_endpoint = os.getenv(
+    "BLOCKS_ENDPOINT", "/cosmos/base/tendermint/v1beta1/blocks/{}"
+)
+tx_endpoint = os.getenv("TXS_ENDPOINT", "/cosmos/tx/v1beta1/txs?events=tx.height={}")
 
 
 async def is_valid_response(resp: ClientResponse) -> bool:
@@ -48,7 +51,8 @@ async def _get(
     """Get data from an endpoint with retries
 
     Args:
-        endpoint (str): endpoint to
+        base_api (str): base endpoint to query from
+        endpoint (str): endpoint to query from base_api
         session (aiohttp.ClientSession): _description_
         sem (asyncio.Semaphore): _description_
         max_retries (int): _description_
@@ -73,7 +77,7 @@ async def _get(
         except ConnectionRefusedError as e:
             print("connection refused error")
         except ClientError as e:
-            print("aiohttp client error")
+            print(f"aiohttp client error with {endpoint=}")
             traceback.print_exc()
         retries += 1
     return None
@@ -81,76 +85,19 @@ async def _get(
 
 async def main():
     current_height = 0
-
+    schema_name = os.getenv("INDEXER_SCHEMA", "public")
+    print(schema_name)
     async with create_pool(
         host=os.getenv("POSTGRES_HOST"),
         port=os.getenv("POSTGRES_PORT"),
         user=os.getenv("POSTGRES_USER"),
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
+        server_settings={"search_path": schema_name},
     ) as pool:
         async with pool.acquire() as conn:
             conn: Connection
-            # creating tables
-            await conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS raw (
-                    chain_id TEXT NOT NULL,
-                    height BIGINT NOT NULL,
-                    block JSONB,
-                    block_tx_count BIGINT NOT NULL,
-                    tx_responses JSONB,
-                    tx_tx_count BIGINT NOT NULL, 
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    PRIMARY KEY (chain_id, height)
-                );
-                CREATE TABLE IF NOT EXISTS blocks(
-                    height BIGINT NOT NULL,
-                    chain_id TEXT NOT NULL,
-                    time TIMESTAMP NOT NULL,
-                    block_hash TEXT NOT NULL,
-                    proposer_address TEXT NOT NULL,
-                    
-                    PRIMARY KEY (chain_id, height),
-                    FOREIGN KEY (chain_id, height) REFERENCES raw(chain_id, height) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS txs(
-                    txhash TEXT NOT NULL PRIMARY KEY,
-                    chain_id TEXT NOT NULL, 
-                    height BIGINT NOT NULL,
-                    code TEXT,
-                    data TEXT,
-                    info TEXT,
-                    logs JSONB,
-                    events JSONB,
-                    raw_log TEXT,
-                    gas_used BIGINT,
-                    gas_wanted BIGINT,
-                    codespace TEXT,
-                    timestamp TIMESTAMP,
-                    FOREIGN KEY (chain_id, height) REFERENCES raw(chain_id, height) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS logs (
-                    txhash TEXT NOT NULL,
-                    msg_index TEXT NOT NULL, -- This should be an int
-                    parsed JSONB,
-                    failed BOOLEAN NOT NULL DEFAULT FALSE,
-                    failed_msg TEXT,
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    
-                    PRIMARY KEY (txhash, msg_index),
-                    FOREIGN KEY (txhash) REFERENCES txs(txhash) ON DELETE CASCADE
-                );
-                CREATE TABLE IF NOT EXISTS log_columns (
-                    event TEXT NOT NULL,
-                    attribute TEXT NOT NULL,
-                    parse BOOLEAN NOT NULL DEFAULT FALSE,
-
-                    PRIMARY KEY (event, attribute)
-                );
-                """
-            )
+            await create_tables(conn, schema_name)
         while True:
             async with ClientSession() as session:
                 print("pulling new data")

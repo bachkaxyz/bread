@@ -35,16 +35,15 @@ async def get_table_cols(db: Database, table_name: str):
         return [col["column_name"] for col in cols]
 
 
-async def create_tables(db: Database):
+async def create_tables(conn: Connection, schema: str):
     cur_dir = os.path.dirname(__file__)
-    async with db.pool.acquire() as conn:
-        file_path = os.path.join(cur_dir, "sql/create_tables.sql")
-        with open(file_path, "r") as f:
-            await conn.execute(f.read().replace("$schema", db.schema))
+    file_path = os.path.join(cur_dir, "sql/create_tables.sql")
+    with open(file_path, "r") as f:
+        await conn.execute(f.read().replace("$schema", schema))
 
-        file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
-        with open(file_path, "r") as f:
-            await conn.execute(f.read().replace("$schema", db.schema))
+    file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
+    with open(file_path, "r") as f:
+        await conn.execute(f.read().replace("$schema", schema))
 
 
 async def upsert_raw_blocks(db: Database, block: dict):
