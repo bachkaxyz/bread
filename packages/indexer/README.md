@@ -1,6 +1,6 @@
 # Indexer
 
-For a detailed structure of how this indexer works look at this [data flow model](https://whimsical.com/secret-network-indexer-data-flow-LRX17PwCNqsaNFP9ezHDa1])
+For a detailed structure of how this indexer works look at this [data flow model](https://whimsical.com/secret-network-indexer-data-flow-LRX17PwCNqsaNFP9ezHDa1)
 
 ## Running the indexer
 
@@ -34,10 +34,8 @@ docker compose -f docker-compose.yaml -f docker-compose.local.yaml run indexer s
 We have a `docker-compose.tests.yaml` that controls the configuration for testing.
 
 - We add a new postgres service just for testing and we make our indexer depend on this service
-- We don't use environment variables and use ones set inside of the file
-- Change command to the pytest command
-
-Run
+- We don't use environment variables and use ones set inside of the docker compose file for consistency
+- Change startup command to the pytest command
 
 ```bash
 docker compose -f docker-compose.yaml -f docker-compose.tests.yaml run indexer
@@ -45,9 +43,9 @@ docker compose -f docker-compose.yaml -f docker-compose.tests.yaml run indexer
 
 This is the same setup for testing locally and on github actions
 
-We have a doc
-
 If you want to run the indexer for development, you can use the following command:
+
+This launches the container with a bash shell. You can then start and stop the python scripts manually.
 
 ```bash
 docker compose run --build --rm indexer sh
@@ -59,4 +57,40 @@ If you want to run the indexer in the background to use it's data, you can use t
 docker compose up -d
 ```
 
-To run tests:
+## Environment Variables
+
+Look at .env.example for our preferred defaults, but for more specific explanations look below:
+
+`BLOCKS_ENDPOINT` -  (optional) (requires one formatting place)  Endpoint to query a block information from. Defaults to:
+
+`/cosmos/base/tendermint/v1beta1/blocks/{}`
+
+`TXS_ENDPOINT` - (optional) (requires one formatting place) Endpoint to query a blocks transactions from. Defaults to:
+
+`/cosmos/tx/v1beta1/txs?events=tx.height={}`
+
+`CHAIN_REGISTRY_NAME` - (required) chain registry name from <https://github.com/cosmos/chain-registry>:
+
+This is required so we load the correct chain_id
+
+`LOAD_CHAIN_REGISTRY_APIS` - (optional) load apis from the chain registry. Defaults to: `true`
+
+`INTERNAL_APIS` - (optional) load apis that aren't on the chain registry in a comma separate format. No default:
+
+Example: `https://api.jackalprotocol.com,https://api.jackalprotocol.com`
+
+`BATCH_SIZE` - (optional) batch size to backfill blocks in. Defaults to:`10`
+
+`DROP_TABLES_ON_STARTUP` - (optional) Do we drop tables on indexer startup. Defaults to: `false`
+
+`INDEXER_SCHEMA` (optional) - default schema to store data in. Defaults to: `public`
+
+Postgres Config from root environment variable:
+
+```shell
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5431
+POSTGRES_DB=postgres
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+```
