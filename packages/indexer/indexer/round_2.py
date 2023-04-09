@@ -158,7 +158,7 @@ async def main():
                 raw = await get_data_live(session, current_height)
                 if raw and raw.height and raw.height > current_height:
                     current_height = raw.height
-                    print("new height {}")
+                    print(f"new height {raw.height=}")
                     async with pool.acquire() as conn:
                         async with conn.transaction():
                             await upsert_data(conn, raw)
@@ -171,7 +171,7 @@ async def upsert_data(conn: Connection, data: Raw):
             INSERT INTO raw(chain_id, height, block, block_tx_count, tx_responses, tx_tx_count)
             VALUES ($1, $2, $3, $4, $5, $6);
             """,
-            *data.get_db_params(),
+            *data.get_raw_db_params(),
         )
 
         await conn.execute(
@@ -181,41 +181,36 @@ async def upsert_data(conn: Connection, data: Raw):
             """,
             *data.block.get_db_params(),
         )
-        # await conn.executemany(
-        #     """
-        #     INSERT INTO txs(txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
-        #     VALUES (
-        #         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-        #     )
-        #     """,
-        #     ,
-        # )
-        # for e, a in cur_log_cols:
-        #     await conn.execute(
-        #         f"""
-        #         INSERT INTO log_columns (event, attribute)
-        #         VALUES ($1, $2)
-        #         ON CONFLICT DO NOTHING
-        #         """,
-        #         e,
-        #         a,
-        #     )
-        # for log in all_logs:
-        #     await conn.execute(
-        #         f"""
-        #         INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
-        #         VALUES (
-        #             $1, $2, $3, $4, $5
-        #         )
-        #         """,
-        #         log.txhash,
-        #         str(log.msg_index),
-        #         log.dump(),
-        #         log.failed,
-        #         str(log.failed_msg)
-        #         if log.failed_msg
-        #         else None,
-        #     )
+        await conn.executemany(
+            """
+            INSERT INTO txs(txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+            )
+            """,
+            data.get_txs_db_params(),
+        )
+
+        await conn.executemany(
+            f"""
+            INSERT INTO log_columns (event, attribute)
+            VALUES ($1, $2)
+            ON CONFLICT DO NOTHING
+            """,
+            data.get_log_columns_db_params(),
+        )
+
+        await conn.executemany(
+            f"""
+            INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
+            VALUES (
+                $1, $2, $3, $4, $5
+            )
+            """,
+            data.get_logs_db_params(),
+        )
+
+        print(f"{data.height=} inserted")
 
     else:
         print(f"{data.height} {data.chain_id} {data.block}")
@@ -243,6 +238,7 @@ async def get_data_live(session: ClientSession, current_height: int) -> Raw | No
                             block_tx_count=raw.block_tx_count,
                             tx_responses_tx_count=0,
                             block=raw.block,
+                            raw_block=raw.raw_block,
                         )
                 else:
                     print("tx_response is not a key or tx_res_json is none")
@@ -252,13 +248,24 @@ async def get_data_live(session: ClientSession, current_height: int) -> Raw | No
                         block_tx_count=raw.block_tx_count,
                         tx_responses_tx_count=0,
                         block=raw.block,
+                        raw_block=raw.raw_block,
                     )
             else:
-                print("block data is None")
-                return None
+                print("no txs")
+                return Raw(
+                    height=raw.height,
+                    chain_id=raw.chain_id,
+                    block_tx_count=raw.block_tx_count,
+                    tx_responses_tx_count=0,
+                    block=raw.block,
+                    raw_block=raw.raw_block,
+                )
         else:
             print("block already processed")
             return None
+    else:
+        print("block data is none")
+        return None
     return raw
 
 

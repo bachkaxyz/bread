@@ -41,14 +41,31 @@ class Tx:
     codespace: str
     timestamp: datetime
 
+    def get_db_params(self):
+        return (
+            self.txhash,
+            self.chain_id,
+            self.height,
+            self.code,
+            self.data,
+            self.info,
+            json.dumps(self.logs),
+            json.dumps(self.events),
+            self.raw_log,
+            self.gas_used,
+            self.gas_wanted,
+            self.codespace,
+            self.timestamp,
+        )
+
 
 @dataclass
 class Raw:
     height: int | None = None
     chain_id: str | None = None
 
-    raw_block = dict
-    raw_tx = List[dict]
+    raw_block: dict | None = None
+    raw_tx: List[dict] | None = None
 
     block_tx_count: int = 0
     tx_responses_tx_count: int = 0
@@ -117,7 +134,7 @@ class Raw:
                 "Block needs to be parsed before a transaction in that block can be parsed"
             )
 
-    def get_db_params(self):
+    def get_raw_db_params(self):
         return (
             self.chain_id,
             self.height,
@@ -126,3 +143,23 @@ class Raw:
             json.dumps(self.raw_tx) if self.tx_responses_tx_count > 0 else None,
             self.tx_responses_tx_count,
         )
+
+    def get_txs_db_params(self):
+        return [tx.get_db_params() for tx in self.txs]
+
+    def get_log_columns_db_params(self):
+        return [[e, a] for e, a in self.log_columns]
+
+    def get_logs_db_params(self):
+        return [get_log_db_params(log) for log in self.logs]
+
+
+# using old log type so leaving here for now until we migrate that type here
+def get_log_db_params(log: Log):
+    return (
+        log.txhash,
+        str(log.msg_index),
+        log.dump(),
+        log.failed,
+        str(log.failed_msg) if log.failed_msg else None,
+    )
