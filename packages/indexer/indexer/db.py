@@ -49,15 +49,9 @@ async def upsert_data(conn: Connection, raw: Raw):
 
         await insert_many_txs(conn, raw)
 
-        await conn.executemany(
-            f"""
-                INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
-                VALUES (
-                    $1, $2, $3, $4, $5
-                )
-                """,
-            raw.get_logs_db_params(),
-        )
+        await insert_many_log_columns(conn, raw)
+
+        await insert_many_logs(conn, raw)
 
         print(f"{raw.height=} inserted")
 
@@ -109,3 +103,14 @@ async def insert_many_log_columns(conn: Connection, raw: Raw):
                 """,
         raw.get_log_columns_db_params(),
     )
+
+async def insert_many_logs(conn: Connection, raw: Raw):
+    await conn.executemany(
+            f"""
+                INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
+                VALUES (
+                    $1, $2, $3, $4, $5
+                )
+                """,
+            raw.get_logs_db_params(),
+        )

@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime
 import json
 import os
-from typing import Dict, List
+from typing import Dict, List, Set, Tuple
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
 from indexer.db import (
@@ -16,6 +16,7 @@ from deepdiff import DeepDiff
 
 import pytest
 from asyncpg import Connection, Pool, create_pool
+from indexer.parser import Log
 
 # fixtures
 from tests.chain_test import mock_chain, mock_client
@@ -84,6 +85,10 @@ async def test_upsert_data(
 
         tx_results = await conn.fetch("select * from txs")
 
+        log_results = await conn.fetch("select * from logs")
+
+        log_columns_results = await conn.fetch("select * from log_columns")
+
     for raw, res in zip(raws, raw_results):
         assert raw.chain_id == res["chain_id"]
         assert raw.height == res["height"]
@@ -129,9 +134,37 @@ async def test_upsert_data(
             try:
                 actual = json.loads(str(b))
                 expected = json.loads(str(r))
-
+                assert {} == DeepDiff(actual, expected)
             except:
                 assert b == r
+
+    logs: List[Log] = []
+    [logs.extend(raw.logs) for raw in raws]
+    for log, res_log in zip(logs, log_results):
+        parsed = json.loads(res_log["parsed"])
+        formatted_log = {f"{e}_{a}": v for (e, a), v in log.event_attributes.items()}
+        assert {} == DeepDiff(formatted_log, parsed)
+
+        log_db_params = list(log.get_log_db_params())
+        log_db_params.pop(2)
+
+        log_res_db_params = [
+            res_log["txhash"],
+            res_log["msg_index"],
+            res_log["failed"],
+            res_log["failed_msg"],
+        ]
+        assert {} == DeepDiff(log_db_params, log_res_db_params)
+
+    log_columns: Set[Tuple[str, str]] = set()
+    for log in logs:
+        log_columns = log_columns.union(log.get_cols())
+
+    fixed_log_columns_results = set([(e, a) for (e, a, _bool) in log_columns_results])
+    assert {} == DeepDiff(sorted(log_columns), sorted(fixed_log_columns_results))
+
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
 
 
 async def test_get_missing(raws: List[Raw], mock_pool):
