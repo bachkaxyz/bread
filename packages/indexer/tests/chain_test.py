@@ -15,7 +15,6 @@ def mock_client():
 
 @pytest.fixture
 def mock_chain():
-
     apis = {
         "https://mock_api.com/": {"hit": 0, "miss": 0},
         "https://mock_api2.com/": {"hit": 0, "miss": 0},
@@ -33,7 +32,6 @@ async def test_api_get(
     mock_client: aiohttp.ClientSession,
     mock_chain: CosmosChain,
 ):
-
     exp_res = {"block": {"mock_key": "mock_response"}}
 
     mock_client.get.return_value.__aenter__.return_value.status = 200
@@ -66,7 +64,6 @@ async def test_api_get_invalid_keys(
     mock_client: aiohttp.ClientSession,
     mock_chain: CosmosChain,
 ):
-
     exp_res = {"code": 500, "message": "mock_response", "details": "mock_details"}
 
     mock_client.get.return_value.__aenter__.return_value.status = 500
@@ -74,11 +71,12 @@ async def test_api_get_invalid_keys(
         exp_res
     )
 
-    assert True == False
+    assert None == await mock_chain.get_block(mock_client)
 
 
-async def test_api_get_invalid_json(mock_semaphore, mock_client, mock_chain):
-
+async def test_api_get_invalid_json(
+    mock_client: aiohttp.ClientSession, mock_chain: CosmosChain
+):
     exp_res = "invalid_json"
 
     mock_client.get.return_value.__aenter__.return_value.status = 500
@@ -87,7 +85,7 @@ async def test_api_get_invalid_json(mock_semaphore, mock_client, mock_chain):
     )
 
     async with aiohttp.ClientSession() as session:
-        result = await mock_chain.get_block(session, mock_semaphore)
+        result = await mock_chain.get_block(session)
         assert None == result
 
 

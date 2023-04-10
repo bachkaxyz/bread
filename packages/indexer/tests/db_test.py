@@ -2,19 +2,24 @@ import asyncio
 from datetime import datetime
 import json
 import os
-from typing import Dict
+from typing import Dict, List
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
 from indexer.db import (
     create_tables,
     drop_tables,
+    upsert_data,
 )
+from indexer.parser import Block, Raw, Tx
+from deepdiff import DeepDiff
 
 
 import pytest
 from asyncpg import Connection, Pool, create_pool
-import pandas as pd
-from .chain_test import mock_chain, mock_client
+
+# fixtures
+from tests.chain_test import mock_chain, mock_client
+from tests.parser_test import raws, unparsed_raw_data
 
 
 @pytest.fixture
@@ -35,21 +40,6 @@ async def mock_pool(mock_schema):
     return pool
 
 
-@pytest.fixture
-def raw_blocks():
-    df = pd.read_csv("tests/test_data/raw_blocks.csv")
-    df["block"] = df["block"].apply(json.loads)
-    return df
-
-
-@pytest.fixture
-def raw_txs():
-    df = pd.read_csv("tests/test_data/raw_txs.csv")
-    df["txs"] = df["txs"].apply(lambda x: json.loads(x) if not pd.isna(x) else [])
-    return df
-
-
-@pytest.mark.asyncio
 async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
     async def check_tables(table_names) -> int:
         async with mock_pool.acquire() as conn:
@@ -65,7 +55,7 @@ async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
     async with mock_pool.acquire() as conn:
         await create_tables(conn, mock_schema)
 
-    table_names = ("raw_blocks", "raw_txs", "blocks", "txs", "logs", "log_columns")
+    table_names = ("raw", "blocks", "txs", "logs", "log_columns")
 
     assert await check_tables(table_names) == len(table_names)
 
@@ -75,100 +65,76 @@ async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
     assert await check_tables(table_names) == 0
 
 
-@pytest.mark.asyncio
-async def test_upsert_raw_blocks(
+async def test_upsert_data(
     mock_pool: Pool,
     mock_schema: str,
     mock_chain: CosmosChain,
     mock_client: ClientSession,
-    mock_semaphore: asyncio.Semaphore,
-    raw_blocks: pd.DataFrame,
-    mocker,
+    raws: List[Raw],
 ):
     async with mock_pool.acquire() as conn:
+        conn: Connection
         await create_tables(conn, mock_schema)
-    # for block in raw_blocks["block"][: len(raw_blocks) // 2]:
-    #     await upsert_raw_blocks(mock_pool, block)
+        for data in raws:
+            await upsert_data(conn, data)
 
-    # valid process block
-    for height, _chain_id, block, _parsed_at in raw_blocks[
-        len(raw_blocks) // 2 :
-    ].itertuples(index=False):
-        assert True == False  # should test parsing blocks
+        raw_results = await conn.fetch("select * from raw")
 
-        # assert True == await process_block(
-        #     height, mock_chain, mock_pool, mock_client, mock_semaphore
-        # )
+        block_results = await conn.fetch("select * from blocks")
 
-    #     results = await conn.fetch(f"select * from {mock_pool.schema}.blocks")
+        tx_results = await conn.fetch("select * from txs")
 
-    # assert len(raw_results) == len(raw_blocks)
-    # assert len(results) == len(raw_blocks)
+    for raw, res in zip(raws, raw_results):
+        assert raw.chain_id == res["chain_id"]
+        assert raw.height == res["height"]
+        assert raw.block_tx_count == res["block_tx_count"]
+        assert raw.tx_responses_tx_count == res["tx_tx_count"]
 
-    # for block, res in zip(raw_blocks["block"], raw_results):
-    #     assert int(res["height"]) == int(block["block"]["header"]["height"])
-    #     assert res["chain_id"] == block["block"]["header"]["chain_id"]
+    for block, res_block in zip([raw.block for raw in raws], block_results):
+        if block:
+            res_block_parsed = Block(
+                height=res_block["height"],
+                chain_id=res_block["chain_id"],
+                time=res_block["time"],
+                proposer_address=res_block["proposer_address"],
+                block_hash=res_block["block_hash"],
+            )
 
-    # for block, res in zip(raw_blocks["block"], results):
-    #     assert int(res["height"]) == int(block["block"]["header"]["height"])
-    #     assert res["chain_id"] == block["block"]["header"]["chain_id"]
-    #     # assert res["time"] == datetime.strptime(
-    #     #     block["block"]["header"]["time"], "%Y-%m-%dT%H:%M:%S.%fZ"
-    #     # )
-    #     assert res["block_hash"] == block["block_id"]["hash"]
-    #     assert res["proposer_address"] == block["block"]["header"]["proposer_address"]
+            for b, r in zip(block.get_db_params(), res_block_parsed.get_db_params()):
+                assert b == r
 
-    # await drop_tables(mock_pool)
-
-
-@pytest.mark.asyncio
-async def test_upsert_raw_txs(
-    mock_pool: Pool,
-    mock_schema: str,
-    mock_chain: CosmosChain,
-    mock_client: ClientSession,
-    mock_semaphore: asyncio.Semaphore,
-    raw_txs: pd.DataFrame,
-    mocker,
-):
-    async with mock_pool.acquire() as conn:
-        await create_tables(conn, mock_schema)
-
-    flattened_raw_txs = []
-    for _chain_id, height, txs, _parsed_at in raw_txs[:500].itertuples(index=False):
-        flattened_raw_txs.extend(txs)
-        # await upsert_raw_txs(mock_pool, {height: txs}, mock_chain.chain_id)
-
-    # valid block data
-    for _chain_id, height, txs, _parsed_at in raw_txs[500:].itertuples(index=False):
-        flattened_raw_txs.extend(txs)
-        mocker.patch(
-            "indexer.process.CosmosChain.get_block_txs",
-            return_value={"tx_responses": txs},
+    txs: List[Tx] = []
+    [txs.extend(raw.txs) for raw in raws]
+    for tx, res_tx in zip(txs, tx_results):
+        res_tx_parsed = Tx(
+            txhash=res_tx["txhash"],
+            height=res_tx["height"],
+            chain_id=res_tx["chain_id"],
+            code=res_tx["code"],
+            data=res_tx["data"],
+            info=res_tx["info"],
+            logs=json.loads(res_tx["logs"]),
+            events=json.loads(res_tx["events"]),
+            raw_log=res_tx["raw_log"],
+            gas_used=res_tx["gas_used"],
+            gas_wanted=res_tx["gas_wanted"],
+            codespace=res_tx["codespace"],
+            timestamp=res_tx["timestamp"],
         )
 
-        assert True == False
-
-    # invalid tx data
-    mocker.patch("indexer.process.CosmosChain.get_block_txs", return_value=None)
-    assert False == True
-
-    async with mock_pool.acquire() as conn:
-        raw_results = await conn.fetch(
-            f"""
-            select * from {mock_schema}.raw_txs
-            """
+        keys = "txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp".split(
+            ", "
         )
+        for k, b, r in zip(keys, tx.get_db_params(), res_tx_parsed.get_db_params()):
+            try:
+                actual = json.loads(str(b))
+                expected = json.loads(str(r))
 
-        results = await conn.fetch(f"select * from {mock_schema}.txs")
-
-    assert len(results) == len(flattened_raw_txs)
-
-    async with mock_pool.acquire() as conn:
-        await drop_tables(conn, mock_schema)
+            except:
+                assert b == r
 
 
-async def test_get_missing(mocker):
+async def test_get_missing(raws: List[Raw], mock_pool):
     # beginning
     # dif is of length 1
     # all caught up

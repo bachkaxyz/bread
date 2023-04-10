@@ -1,17 +1,11 @@
 import json
-import os
-import traceback
-from typing import Tuple
-from aiohttp import ClientError, ClientResponse, ClientSession
-import asyncio
-from base64 import b64decode
+import os, asyncio
+from aiohttp import ClientSession
 from asyncpg import create_pool, Connection
-import datetime
 from indexer.chain import LATEST, CosmosChain, get_chain_from_environment
-from indexer.db import create_tables
-from indexer.exceptions import APIResponseError
+from indexer.db import create_tables, upsert_data
 
-from indexer.parser import Raw, parse_logs
+from indexer.parser import Raw
 
 
 async def main():
@@ -31,6 +25,8 @@ async def main():
                 conn: Connection
                 await create_tables(conn, schema_name)
             while True:
+                with open("tests/test_data/test_data.json", "w") as f:
+                    f.write(json.dumps(data))
                 print("pulling new data")
                 raw = await get_data_live(session, chain, current_height)
                 if raw and raw.height and raw.height > current_height:
@@ -38,7 +34,10 @@ async def main():
                     print(f"new height {raw.height=}")
                     async with pool.acquire() as conn:
                         async with conn.transaction():
-                            await raw.upsert_data(conn)
+                            await upsert_data(conn, raw)
+
+
+data = []
 
 
 async def get_data_live(
@@ -57,6 +56,12 @@ async def get_data_live(
                 )
                 if tx_res_json is not None and "tx_responses" in tx_res_json:
                     tx_responses = tx_res_json["tx_responses"]
+                    data.append(
+                        {
+                            "txs": tx_responses,
+                            "block": block_res_json,
+                        }
+                    )
                     raw.parse_tx_responses(tx_responses)
                     if raw.block_tx_count != raw.tx_responses_tx_count:
                         print("tx count not right")

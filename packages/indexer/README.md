@@ -38,7 +38,7 @@ We have a `docker-compose.tests.yaml` that controls the configuration for testin
 - Change startup command to the pytest command
 
 ```bash
-docker compose -f docker-compose.yaml -f docker-compose.tests.yaml run indexer
+docker compose -f docker-compose.tests.yaml run indexer
 ```
 
 This is the same setup for testing locally and on github actions

@@ -42,6 +42,8 @@ async def main():
                         )
                         if len(wrong_txs) == 0:
                             print("no wrong txs")
+                        else:
+                            print(wrong_txs)
                         await asyncio.sleep(2)
 
                         async for record in missing_blocks_cursor(cursor_conn, chain):
@@ -50,9 +52,7 @@ async def main():
                             if dif == -1:
                                 print("min block in db")
 
-                                lowest_height = await chain.get_lowest_height(
-                                    session
-                                )
+                                lowest_height = await chain.get_lowest_height(session)
 
                                 if height - 20 > lowest_height:
                                     dif = 20
@@ -72,7 +72,7 @@ async def main():
                                 print(
                                     f"querying range {current_height} - {query_lower_bound}"
                                 )
-                                results = await asyncio.gather(
+                                results: List[Raw | None] = await asyncio.gather(
                                     *[
                                         get_data_historical(session, chain, h)
                                         for h in range(
@@ -88,7 +88,9 @@ async def main():
                                 current_height = query_lower_bound
 
 
-async def get_data_historical(session: ClientSession, chain:CosmosChain,  height: int) -> Raw | None:
+async def get_data_historical(
+    session: ClientSession, chain: CosmosChain, height: int
+) -> Raw | None:
     raw = Raw()
     print(f"pulling new data {height}")
     block_res_json = await chain.get_block(session, height=height)
