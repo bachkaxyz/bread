@@ -16,4 +16,4 @@ jobs:
             
           - name: Docker Compose Run Tests
             working-directory: packages/indexer
-            run: docker compose -f docker-compose.tests.yaml run indexer
+            run: docker compose -f docker-compose.tests.yaml run indexer-test
