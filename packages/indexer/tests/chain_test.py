@@ -169,6 +169,7 @@ async def test_chain_environment_pass(mock_client: ClientSession):
         exp_res
     )
 
+    # only external apis
     os.environ["CHAIN_REGISTRY_NAME"] = "jackal"
     async with ClientSession() as session:
         assert await get_chain_from_environment(session) == CosmosChain(
@@ -178,21 +179,71 @@ async def test_chain_environment_pass(mock_client: ClientSession):
             apis={
                 "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
                 "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
-                "": {"hit": 0, "miss": 0},
             },
             current_api_index=0,
             time_between_blocks=1,
         )
 
-    # this next var needs to eval to true for test to pass
-    # os.environ["LOAD_CHAIN_REGISTRY_APIS"] = "FALSE"
-    # os.environ["APIS"] = ""
-    # async with ClientSession() as session:
-    #     assert await get_chain_from_environment(session) == CosmosChain(
-    #         chain_id="jackal-1",
-    #         blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
-    #         txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
-    #         apis={},
-    #         current_api_index=0,
-    #         time_between_blocks=1,
-    #     )
+    # no apis should error
+    os.environ["LOAD_CHAIN_REGISTRY_APIS"] = "FALSE"
+    os.environ["APIS"] = ""
+
+    async with ClientSession() as session:
+        with pytest.raises(EnvironmentError):
+            await get_chain_from_environment(session)
+
+    # only internal apis
+    os.environ["LOAD_CHAIN_REGISTRY_APIS"] = "FALSE"
+    os.environ[
+        "APIS"
+    ] = "https://api.jackalprotocol.com,https://jackal-api.lavenderfive.com:443"
+    async with ClientSession() as session:
+        assert await get_chain_from_environment(session) == CosmosChain(
+            chain_id="jackal-1",
+            blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
+            txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
+            apis={
+                "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
+                "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
+            },
+            current_api_index=0,
+            time_between_blocks=1,
+        )
+
+    # both external and internal apis
+    os.environ["LOAD_CHAIN_REGISTRY_APIS"] = "TRUE"
+    os.environ[
+        "APIS"
+    ] = "https://api2.jackalprotocol.com,https://jackal-api2.lavenderfive.com:443"
+    async with ClientSession() as session:
+        assert await get_chain_from_environment(session) == CosmosChain(
+            chain_id="jackal-1",
+            blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
+            txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
+            apis={
+                "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
+                "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
+                "https://api2.jackalprotocol.com": {"hit": 0, "miss": 0},
+                "https://jackal-api2.lavenderfive.com:443": {"hit": 0, "miss": 0},
+            },
+            current_api_index=0,
+            time_between_blocks=1,
+        )
+
+    # no duplicate apis:
+    os.environ["LOAD_CHAIN_REGISTRY_APIS"] = "TRUE"
+    os.environ[
+        "APIS"
+    ] = "https://api.jackalprotocol.com,https://jackal-api.lavenderfive.com:443"
+    async with ClientSession() as session:
+        assert await get_chain_from_environment(session) == CosmosChain(
+            chain_id="jackal-1",
+            blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
+            txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
+            apis={
+                "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
+                "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
+            },
+            current_api_index=0,
+            time_between_blocks=1,
+        )

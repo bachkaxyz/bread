@@ -214,8 +214,8 @@ async def get_chain_registry_info(
 
 async def get_chain_info(session) -> Tuple[str, Dict[str, dict]]:
     chain_registry_name = os.getenv("CHAIN_REGISTRY_NAME", None)
-    load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", True)
-    apis = []
+    load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", "True").upper() == "TRUE"
+    apis = set()  # don't add duplicate apis
     if chain_registry_name:
         chain_id, chain_registry_apis = await get_chain_registry_info(
             session, chain_registry_name
@@ -223,15 +223,19 @@ async def get_chain_info(session) -> Tuple[str, Dict[str, dict]]:
         print(load_external_apis)
         if load_external_apis:
             print("added external")
-            apis.extend(chain_registry_apis)
+            [apis.add(api) for api in chain_registry_apis]
     else:
         raise EnvironmentError(
             "CHAIN_REGISTRY_NAME environment variable not provided. This is needed to load the correct chain_id"
         )
-    env_apis = os.getenv("APIS", "").split(",")
+    env_apis = os.getenv("APIS", "")
+    if env_apis != "":
+        [apis.add(api) for api in env_apis.split(",")]
 
-    apis.extend(env_apis)
-    print(apis)
+    if len(apis) == 0:
+        raise EnvironmentError(
+            "No APIS. Either provide your own apis through APIS or turn LOAD_CHAIN_REGISTRY_APIS to True"
+        )
     formatted_apis = {api: {"hit": 0, "miss": 0} for api in apis}
     return chain_id, formatted_apis
 
