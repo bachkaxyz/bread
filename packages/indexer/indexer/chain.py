@@ -2,7 +2,7 @@ import asyncio, json, traceback
 import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientError, ClientResponse, ClientSession
 
 from indexer.exceptions import APIResponseError
 
@@ -100,6 +100,16 @@ class CosmosChain:
                         raise APIResponseError("API Response Not Valid")
             except APIResponseError as e:
                 print(f"failed to get {cur_api}{endpoint}")
+
+                self.add_api_miss(cur_api)
+                self.iterate_api()
+            except ConnectionRefusedError as e:
+                print("connection refused error")
+                self.add_api_miss(cur_api)
+                self.iterate_api()
+            except ClientError as e:
+                print("aiohttp client error")
+                traceback.print_exc()
 
                 self.add_api_miss(cur_api)
                 self.iterate_api()

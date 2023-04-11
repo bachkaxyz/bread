@@ -12,15 +12,16 @@ from indexer.parser import Raw
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
     async for record in conn.cursor(
-        f"""
+        """
         select height, difference_per_block from (
             select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
             from raw
-            where chain_id = {chain.chain_id}
+            where chain_id = $1
         ) as dif
         where difference_per_block <> 1
         order by height desc
-        """
+        """,
+        chain.chain_id,
     ):
         yield record
 
@@ -104,13 +105,14 @@ async def insert_many_log_columns(conn: Connection, raw: Raw):
         raw.get_log_columns_db_params(),
     )
 
+
 async def insert_many_logs(conn: Connection, raw: Raw):
     await conn.executemany(
-            f"""
+        f"""
                 INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
                 VALUES (
                     $1, $2, $3, $4, $5
                 )
                 """,
-            raw.get_logs_db_params(),
-        )
+        raw.get_logs_db_params(),
+    )

@@ -17,6 +17,7 @@ from deepdiff import DeepDiff
 import pytest
 from asyncpg import Connection, Pool, create_pool
 from indexer.parser import Log
+from indexer.db import missing_blocks_cursor
 
 # fixtures
 from tests.chain_test import mock_chain, mock_client
@@ -167,9 +168,25 @@ async def test_upsert_data(
         await drop_tables(conn, mock_schema)
 
 
-async def test_get_missing(raws: List[Raw], mock_pool):
-    # beginning
-    # dif is of length 1
-    # all caught up
-    # not all caught up
-    pass
+async def test_get_missing_blocks(
+    raws: List[Raw], mock_pool: Pool, mock_schema: str, mock_chain: CosmosChain
+):
+    heights = []
+    async with mock_pool.acquire() as conn:
+        conn: Connection
+        await create_tables(conn, mock_schema)
+        for data in raws:
+            if data.height:
+                heights.append(data.height)
+            await upsert_data(conn, data)
+        mock_chain.chain_id = "jackal-1"
+
+        async with conn.transaction():
+            res_heights = [
+                height async for height in missing_blocks_cursor(conn, mock_chain)
+            ]
+            assert [
+                (row["height"], row["difference_per_block"]) for row in res_heights
+            ] == [(2316144, 2), (2316140, -1)]
+
+        await drop_tables(conn, mock_schema)

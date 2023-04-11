@@ -1,43 +1,27 @@
 import json
 import os, asyncio
 from aiohttp import ClientSession
-from asyncpg import create_pool, Connection
+from asyncpg import Pool, create_pool, Connection
 from indexer.chain import LATEST, CosmosChain, get_chain_from_environment
 from indexer.db import create_tables, upsert_data
 
 from indexer.parser import Raw
+from indexer.main import main
+
+current_height = 0
 
 
-async def main():
-    current_height = 0
-    schema_name = os.getenv("INDEXER_SCHEMA", "public")
-    async with create_pool(
-        host=os.getenv("POSTGRES_HOST"),
-        port=os.getenv("POSTGRES_PORT"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        database=os.getenv("POSTGRES_DB"),
-        server_settings={"search_path": schema_name},
-    ) as pool:
-        async with ClientSession() as session:
-            chain = await get_chain_from_environment(session)
-            async with pool.acquire() as conn:
-                conn: Connection
-                await create_tables(conn, schema_name)
-            while True:
-                with open("tests/test_data/test_data.json", "w") as f:
-                    f.write(json.dumps(data))
-                print("pulling new data")
-                raw = await get_data_live(session, chain, current_height)
-                if raw and raw.height and raw.height > current_height:
-                    current_height = raw.height
-                    print(f"new height {raw.height=}")
-                    async with pool.acquire() as conn:
-                        async with conn.transaction():
-                            await upsert_data(conn, raw)
-
-
-data = []
+async def live(session: ClientSession, chain: CosmosChain, pool: Pool):
+    global current_height
+    print("pulling live data")
+    raw = await get_data_live(session, chain, current_height)
+    if raw and raw.height and raw.height > current_height:
+        current_height = raw.height
+        print(f"new height {raw.height=}")
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await upsert_data(conn, raw)
+    print("live finished")
 
 
 async def get_data_live(
@@ -56,12 +40,6 @@ async def get_data_live(
                 )
                 if tx_res_json is not None and "tx_responses" in tx_res_json:
                     tx_responses = tx_res_json["tx_responses"]
-                    data.append(
-                        {
-                            "txs": tx_responses,
-                            "block": block_res_json,
-                        }
-                    )
                     raw.parse_tx_responses(tx_responses)
                     if raw.block_tx_count != raw.tx_responses_tx_count:
                         print("tx count not right")
@@ -94,7 +72,7 @@ async def get_data_live(
                     raw_block=raw.raw_block,
                 )
         else:
-            print("block already processed")
+            print(f"block already processed {raw.height=} {current_height=}")
             return None
     else:
         print("block data is none")
@@ -103,4 +81,4 @@ async def get_data_live(
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(main(live))
