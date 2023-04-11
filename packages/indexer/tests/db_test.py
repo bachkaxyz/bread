@@ -1,8 +1,6 @@
-import asyncio
-from datetime import datetime
 import json
 import os
-from typing import Dict, List, Set, Tuple
+from typing import List, Set, Tuple
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
 from indexer.db import (
@@ -10,14 +8,15 @@ from indexer.db import (
     drop_tables,
     upsert_data,
 )
-from indexer.parser import Block, Raw, Tx
+from indexer.parser import Block, Raw, Tx, Log
 from deepdiff import DeepDiff
 
 
 import pytest
 from asyncpg import Connection, Pool, create_pool
-from indexer.parser import Log
-from indexer.db import missing_blocks_cursor
+
+from indexer.db import missing_blocks_cursor, insert_block
+from indexer.exceptions import ChainDataIsNoneError
 
 # fixtures
 from tests.chain_test import mock_chain, mock_client
@@ -78,7 +77,7 @@ async def test_upsert_data(
         conn: Connection
         await create_tables(conn, mock_schema)
         for data in raws:
-            await upsert_data(conn, data)
+            assert True == await upsert_data(conn, data)
 
         raw_results = await conn.fetch("select * from raw")
 
@@ -178,7 +177,7 @@ async def test_get_missing_blocks(
         for data in raws:
             if data.height:
                 heights.append(data.height)
-            await upsert_data(conn, data)
+            assert True == await upsert_data(conn, data)
         mock_chain.chain_id = "jackal-1"
 
         async with conn.transaction():
@@ -190,3 +189,12 @@ async def test_get_missing_blocks(
             ] == [(2316144, 2), (2316140, -1)]
 
         await drop_tables(conn, mock_schema)
+
+
+async def upsert_invalid_data(mock_pool: Pool):
+    async with mock_pool.acquire() as conn:
+        assert False == await upsert_data(conn, Raw(height=None))
+
+    async with mock_pool.acquire() as conn:
+        with pytest.raises(ChainDataIsNoneError):
+            await insert_block(conn, Raw())

@@ -42,8 +42,8 @@ async def create_tables(conn: Connection, schema: str):
         await conn.execute(f.read().replace("$schema", schema))
 
 
-async def upsert_data(conn: Connection, raw: Raw):
-    if not (raw.height is None or raw.chain_id is None or raw.block is None):
+async def upsert_data(conn: Connection, raw: Raw) -> bool:
+    if raw.height is not None and raw.chain_id is not None and raw.block is not None:
         await insert_raw(conn, raw)
 
         await insert_block(conn, raw)
@@ -55,9 +55,11 @@ async def upsert_data(conn: Connection, raw: Raw):
         await insert_many_logs(conn, raw)
 
         print(f"{raw.height=} inserted")
+        return True
 
     else:
         print(f"{raw.height} {raw.chain_id} {raw.block}")
+        return False
 
 
 async def insert_raw(conn: Connection, raw: Raw):

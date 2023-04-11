@@ -100,15 +100,14 @@ class CosmosChain:
                         raise APIResponseError("API Response Not Valid")
             except APIResponseError as e:
                 print(f"failed to get {cur_api}{endpoint}")
-
                 self.add_api_miss(cur_api)
                 self.iterate_api()
             except ConnectionRefusedError as e:
-                print("connection refused error")
+                print(f"connection refused error {cur_api}{endpoint}")
                 self.add_api_miss(cur_api)
                 self.iterate_api()
             except ClientError as e:
-                print("aiohttp client error")
+                print(f"aiohttp client error {cur_api}{endpoint}")
                 traceback.print_exc()
 
                 self.add_api_miss(cur_api)
@@ -181,14 +180,14 @@ class CosmosChain:
         return data
 
     async def get_lowest_height(self, session: ClientSession):
-        block_res = await session.get(
+        async with session.get(
             self.get_next_api() + self.blocks_endpoint.format(1)
-        )
-        block_res_json = await block_res.json()
-        lowest_height = (
-            block_res_json["message"].split("height is ")[-1].split(":")[0].lstrip()
-        )
-        return int(lowest_height)
+        ) as block_res:
+            block_res_json = json.loads(await block_res.read())
+            lowest_height = (
+                block_res_json["message"].split("height is ")[-1].split(":")[0].lstrip()
+            )
+            return int(lowest_height)
 
 
 async def get_chain_registry_info(
@@ -203,13 +202,14 @@ async def get_chain_registry_info(
     Returns:
         Tuple[str, List[str]]: Chain_id, list of apis
     """
-    raw_chain = await session.get(
+    async with session.get(
         url=f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_registry_name}/chain.json"
-    )
-    raw_chain = json.loads(await raw_chain.read())
-    apis: List[str] = [api["address"] for api in raw_chain["apis"]["rest"]]
-    chain_id: str = raw_chain["chain_id"]
-    return chain_id, apis
+    ) as raw_chain:
+        raw_chain = json.loads(await raw_chain.read())
+        rest_apis = raw_chain["apis"]["rest"]
+        apis: List[str] = [api["address"] for api in rest_apis]
+        chain_id: str = raw_chain["chain_id"]
+        return chain_id, apis
 
 
 async def get_chain_info(session) -> Tuple[str, Dict[str, dict]]:
@@ -220,7 +220,9 @@ async def get_chain_info(session) -> Tuple[str, Dict[str, dict]]:
         chain_id, chain_registry_apis = await get_chain_registry_info(
             session, chain_registry_name
         )
+        print(load_external_apis)
         if load_external_apis:
+            print("added external")
             apis.extend(chain_registry_apis)
     else:
         raise EnvironmentError(
