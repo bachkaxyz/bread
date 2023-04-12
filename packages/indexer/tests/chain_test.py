@@ -146,6 +146,14 @@ async def test_chain_environment_fail_no_chain_registry(
         assert None == await get_chain_from_environment(mock_client)
 
 
+async def test_chain_environment_time_between_blocks_not_int(mock_client):
+    os.environ["TIME_BETWEEN_BLOCKS"] = "not a string"
+    with pytest.raises(EnvironmentError):
+        assert None == await get_chain_from_environment(mock_client)
+
+    os.environ["TIME_BETWEEN_BLOCKS"] = "1"
+
+
 async def test_chain_environment_pass(mock_client: ClientSession):
     exp_res = {
         "chain_name": "jackal",

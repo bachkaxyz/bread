@@ -273,7 +273,7 @@ class Raw:
 
 
 async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain):
-    if raw.height and raw.block_tx_count:
+    if raw.height is not None and raw.block_tx_count != 0:
         tx_res_json = await chain.get_block_txs(
             session=session,
             height=raw.height,

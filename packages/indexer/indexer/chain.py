@@ -250,7 +250,7 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
     time_between = os.getenv("TIME_BETWEEN_BLOCKS", "1")
     try:
         time_between = int(time_between)
-    except:
+    except OSError as e:
         raise EnvironmentError("TIME_BETWEEN_BLOCKS is not of type int")
     chain = CosmosChain(
         chain_id=chain_id,

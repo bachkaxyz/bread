@@ -16,7 +16,6 @@ async def run_and_upsert_tasks(raw_tasks: list, pool: Pool):
     for res in results:
         if res:
             upsert_tasks.append(upsert_data(pool, res))
-    print(upsert_tasks)
     if upsert_tasks:
         await asyncio.gather(*upsert_tasks)
 

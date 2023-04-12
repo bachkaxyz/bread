@@ -3,7 +3,13 @@ from typing import Any, List
 from indexer.chain import CosmosChain
 from indexer.parser import Raw, process_tx
 from indexer.live import live, get_data_live
-from indexer.db import create_tables, drop_tables, upsert_data, wrong_tx_count_cursor
+from indexer.db import (
+    create_tables,
+    drop_tables,
+    upsert_data,
+    wrong_tx_count_cursor,
+    missing_blocks_cursor,
+)
 from indexer.backfill import get_data_historical, run_and_upsert_tasks, backfill
 from tests.db_test import raws, mock_schema, mock_client, mock_pool, unparsed_raw_data
 from tests.chain_test import mock_client, mock_chain
@@ -233,7 +239,7 @@ async def test_backfill_run_and_upsert_batch(
     mocker.resetall()
 
 
-async def test_missing_blocks_cursor_backfill(
+async def test_wrong_tx_count_cursor_under_than_20(
     mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
@@ -306,7 +312,7 @@ async def test_get_data_historical_block_is_none(
     assert None == await get_data_historical(mock_client, mock_chain, 1)
 
 
-async def test_more_than_20_missing_blocks_cursor(
+async def test_wrong_tx_count_cursor_more_than_20(
     mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
@@ -365,3 +371,137 @@ async def test_more_than_20_missing_blocks_cursor(
         await drop_tables(conn, mock_schema)
 
     mocker.resetall()
+
+
+async def test_missing_blocks_cursor_less_than_20(
+    mock_pool: Pool,
+    mock_chain: CosmosChain,
+    mock_schema: str,
+    mock_client: ClientSession,
+    mocker,
+    raws: List[Raw],
+    unparsed_raw_data: List[dict],
+):
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
+        await create_tables(conn, mock_schema)
+
+    current_height = 0
+    mock_chain.chain_id = "jackal-1"
+    raw = raws[0]
+    unparsed = unparsed_raw_data[0]
+    if not raw.height:
+        return
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_block",
+        return_value=unparsed["block"],
+    )
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_block_txs",
+        return_value={"tx_responses": unparsed["txs"]},
+    )
+    raw_res = await get_data_live(mock_client, mock_chain, current_height)
+    if raw_res:
+        print(raw_res.tx_responses_tx_count, raw_res.block_tx_count)
+        await upsert_data(mock_pool, raw_res)
+
+    async with mock_pool.acquire() as cursor_conn:
+        async with cursor_conn.transaction():
+            raw_tasks = []
+            wrong_tx_heights = [
+                (height, dif)
+                async for (height, dif) in missing_blocks_cursor(
+                    cursor_conn, mock_chain
+                )
+            ]
+
+            assert [(2316140, -1)] == wrong_tx_heights
+
+    mocker.resetall()
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_lowest_height",
+        return_value=2316140 - 20,
+    )
+    mocker.patch("indexer.backfill.run_and_upsert_tasks", return_value=None)
+    await backfill(mock_client, mock_chain, mock_pool)
+
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
+
+    mocker.resetall()
+
+
+async def test_missing_blocks_cursor_more_than_20(
+    mock_pool: Pool,
+    mock_chain: CosmosChain,
+    mock_schema: str,
+    mock_client: ClientSession,
+    mocker,
+    raws: List[Raw],
+    unparsed_raw_data: List[dict],
+):
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
+        await create_tables(conn, mock_schema)
+
+    current_height = 0
+    mock_chain.chain_id = "jackal-1"
+    raw = raws[0]
+    unparsed = unparsed_raw_data[0]
+    if not raw.height:
+        return
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_block",
+        return_value=unparsed["block"],
+    )
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_block_txs",
+        return_value={"tx_responses": unparsed["txs"]},
+    )
+    raw_res = await get_data_live(mock_client, mock_chain, current_height)
+    if raw_res:
+        print(raw_res.tx_responses_tx_count, raw_res.block_tx_count)
+        await upsert_data(mock_pool, raw_res)
+
+    async with mock_pool.acquire() as cursor_conn:
+        async with cursor_conn.transaction():
+            raw_tasks = []
+            wrong_tx_heights = [
+                (height, dif)
+                async for (height, dif) in missing_blocks_cursor(
+                    cursor_conn, mock_chain
+                )
+            ]
+
+            assert [(2316140, -1)] == wrong_tx_heights
+
+    mocker.resetall()
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_lowest_height",
+        return_value=2316140 - 40,
+    )
+    mocker.patch("indexer.backfill.run_and_upsert_tasks", return_value=None)
+    await backfill(mock_client, mock_chain, mock_pool)
+
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
+
+    mocker.resetall()
+
+
+async def test_process_tx_incorrect_wrong_input(
+    mock_client: ClientSession, mock_chain: CosmosChain
+):
+    raw = Raw()
+    assert await process_tx(raw, mock_client, mock_chain) == Raw(
+        height=None,
+        chain_id=None,
+        raw_block=None,
+        raw_tx=None,
+        block_tx_count=0,
+        tx_responses_tx_count=0,
+        block=None,
+        txs=[],
+        logs=[],
+        log_columns=set(),
+    )
