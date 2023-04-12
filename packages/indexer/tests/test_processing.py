@@ -231,3 +231,68 @@ async def test_backfill_run_and_upsert_batch(
         await drop_tables(conn, mock_schema)
 
     mocker.resetall()
+
+
+async def test_missing_blocks_cursor_backfill(
+    mock_pool: Pool,
+    mock_chain: CosmosChain,
+    mock_schema: str,
+    mock_client: ClientSession,
+    mocker,
+    raws: List[Raw],
+    unparsed_raw_data: List[dict],
+):
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
+        await create_tables(conn, mock_schema)
+    current_height = 0
+    mock_chain.chain_id = "jackal-1"
+    raw = raws[0]
+    unparsed = unparsed_raw_data[0]
+    if not raw.height:
+        return
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_block",
+        return_value=unparsed["block"],
+    )
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_block_txs",
+        return_value={"tx_responses": unparsed_raw_data[1]["txs"]},
+    )
+    raw_res = await get_data_live(mock_client, mock_chain, current_height)
+    if raw_res:
+        print(raw_res.tx_responses_tx_count, raw_res.block_tx_count)
+        await upsert_data(mock_pool, raw_res)
+
+    async with mock_pool.acquire() as conn:
+        async with conn.transaction():
+            async for record in wrong_tx_count_cursor(conn, mock_chain):
+                assert record["height"] == 2316140
+
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_block_txs",
+        return_value={"tx_responses": unparsed["txs"]},
+    )
+    mocker.patch(
+        "indexer.chain.CosmosChain.get_lowest_height",
+        return_value=2316140,
+    )
+    await backfill(mock_client, mock_chain, mock_pool)
+
+    async with mock_pool.acquire() as conn:
+        async with conn.transaction():
+            wrong_tx_heights = [
+                record["height"]
+                async for record in wrong_tx_count_cursor(conn, mock_chain)
+            ]
+            assert wrong_tx_heights == []
+
+        rec = await conn.fetch(
+            "select block_tx_count, tx_tx_count from raw where height = 2316140"
+        )
+        assert rec[0]["block_tx_count"] == rec[0]["tx_tx_count"]
+
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
+
+    mocker.resetall()

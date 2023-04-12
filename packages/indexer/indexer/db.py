@@ -56,12 +56,13 @@ async def create_tables(conn: Connection, schema: str):
 
 
 async def upsert_data(pool: Pool, raw: Raw) -> bool:
-    if raw.height is not None and raw.chain_id is not None and raw.block is not None:
+    if raw.height is not None and raw.chain_id is not None:
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await insert_raw(conn, raw)
-
-                await insert_block(conn, raw)
+                if raw.block is not None:
+                    print("raw block height", raw.block.height)
+                    await insert_block(conn, raw)
 
                 await insert_many_txs(conn, raw)
 
@@ -81,7 +82,9 @@ async def insert_raw(conn: Connection, raw: Raw):
     await conn.execute(
         f"""
                 INSERT INTO raw(chain_id, height, block, block_tx_count, tx_responses, tx_tx_count)
-                VALUES ($1, $2, $3, $4, $5, $6);
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT ON CONSTRAINT raw_pkey
+                DO UPDATE SET tx_responses = EXCLUDED.tx_responses, tx_tx_count = EXCLUDED.tx_tx_count;
                 """,
         *raw.get_raw_db_params(),
     )
