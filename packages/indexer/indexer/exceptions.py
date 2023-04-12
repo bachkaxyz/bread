@@ -14,7 +14,7 @@ class APIResponseError(ChainDataError):
     pass
 
 
-class BlockNotParsedError(ChainDataError):
+class BlockPrimaryKeyNotDefinedError(ChainDataError):
     pass
 
 

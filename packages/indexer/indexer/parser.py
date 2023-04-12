@@ -4,9 +4,11 @@ from datetime import datetime
 import json
 import time
 from typing import List
+from aiohttp import ClientSession
 from asyncpg import Connection
 
-from indexer.exceptions import BlockNotParsedError
+from indexer.exceptions import BlockPrimaryKeyNotDefinedError
+from indexer.chain import CosmosChain
 
 DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -187,7 +189,7 @@ class Raw:
     def parse_tx_responses(self, raw_tx_responses: List[dict]):
         self.raw_tx = raw_tx_responses
         self.tx_responses_tx_count = len(raw_tx_responses)
-        if self.block and self.chain_id:
+        if self.chain_id and self.height:
             for tx_response in raw_tx_responses:
                 self.txs.append(
                     Tx(
@@ -216,8 +218,8 @@ class Raw:
                 for log in logs:
                     self.log_columns = self.log_columns.union(log.get_cols())
         else:
-            raise BlockNotParsedError(
-                "Block needs to be parsed before a transaction in that block can be parsed"
+            raise BlockPrimaryKeyNotDefinedError(
+                "A transactions needs a chain id and height in order to be inserted correctly since this is the primary key"
             )
 
     def get_raw_db_params(self):
@@ -268,3 +270,60 @@ class Raw:
 #         msg_cols.update(msg_dic.keys())
 #         msgs.append(msg_dic)
 #     return msgs, msg_cols
+
+
+async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain):
+    if raw.height and raw.block_tx_count:
+        tx_res_json = await chain.get_block_txs(
+            session=session,
+            height=raw.height,
+        )
+
+        if tx_res_json is not None and "tx_responses" in tx_res_json:
+            tx_responses = tx_res_json["tx_responses"]
+            raw.parse_tx_responses(tx_responses)
+            if raw.block_tx_count == raw.tx_responses_tx_count:
+                return raw
+            else:
+                print("tx count not right")
+                return Raw(
+                    height=raw.height,
+                    chain_id=raw.chain_id,
+                    block_tx_count=raw.block_tx_count,
+                    tx_responses_tx_count=0,
+                    block=raw.block,
+                    raw_block=raw.raw_block,
+                )
+
+        else:
+            print("tx_response is not a key or tx_res_json is none")
+            return Raw(
+                height=raw.height,
+                chain_id=raw.chain_id,
+                block_tx_count=raw.block_tx_count,
+                tx_responses_tx_count=0,
+                block=raw.block,
+                raw_block=raw.raw_block,
+            )
+    else:
+        print("raw.height or raw.block_tx_count does not exist so cannot parse txs")
+        return raw
+
+
+async def process_block(
+    block_raw_data: dict, session: ClientSession, chain: CosmosChain
+) -> Raw:
+    raw = Raw()
+    raw.parse_block(block_raw_data)
+    if raw.block and raw.height and raw.block_tx_count > 0:
+        return await process_tx(raw, session, chain)
+    else:
+        print("no txs")
+        return Raw(
+            height=raw.height,
+            chain_id=raw.chain_id,
+            block_tx_count=raw.block_tx_count,
+            tx_responses_tx_count=0,
+            block=raw.block,
+            raw_block=raw.raw_block,
+        )

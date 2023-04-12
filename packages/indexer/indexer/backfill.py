@@ -1,22 +1,23 @@
 import asyncio
-from dataclasses import Field, dataclass, field
-import json
-import os
-import traceback
-from typing import Coroutine, List, Set, Tuple
-from aiohttp import ClientResponse, ClientSession
-import aiohttp
-from asyncpg import Pool, create_pool, Connection
-from indexer.chain import CosmosChain, get_chain_from_environment
-from indexer.db import missing_blocks_cursor
-from indexer.exceptions import APIResponseError, BlockNotParsedError
-from indexer.parser import Log, Raw, parse_logs
-from datetime import datetime
-
-from indexer.db import upsert_data
+from typing import Any, List
+from aiohttp import ClientSession
+from asyncpg import Pool, Connection
+from indexer.chain import CosmosChain
+from indexer.db import missing_blocks_cursor, wrong_tx_count_cursor, upsert_data
+from indexer.parser import Raw, process_tx, process_block
 from indexer.main import main
 
 min_block_height = 116001
+
+
+async def run_and_upsert_tasks(raw_tasks: list, pool: Pool):
+    results: List[Raw | None] = await asyncio.gather(*raw_tasks)
+    upsert_tasks = []
+    for res in results:
+        if res:
+            upsert_tasks.append(upsert_data(pool, res))
+    if upsert_tasks:
+        await asyncio.gather(*upsert_tasks)
 
 
 async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
@@ -25,18 +26,23 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
         cursor_conn: Connection
 
         async with cursor_conn.transaction():
-            wrong_txs = await cursor_conn.execute(
-                """
-                select height
-                from raw
-                where tx_tx_count <> block_tx_count
-                """
-            )
-            if len(wrong_txs) == 0:
-                print("no wrong txs")
-            else:
-                print(wrong_txs)
-            await asyncio.sleep(2)
+            raw_tasks = []
+            async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
+                cursor_conn, chain
+            ):
+                print(f"{height}, {block_tx_count}")
+                raw = Raw(
+                    height=height,
+                    block_tx_count=block_tx_count,
+                    chain_id=chain_id,
+                )
+                raw_tasks.append(process_tx(raw, session, chain))
+
+                if len(raw_tasks) > 20:
+                    await run_and_upsert_tasks(raw_tasks, pool)
+                    raw_tasks = []
+            await run_and_upsert_tasks(raw_tasks, pool)
+            raw_tasks = []
 
             async for record in missing_blocks_cursor(cursor_conn, chain):
                 height, dif = record
@@ -62,16 +68,12 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                     else:
                         query_lower_bound = min_height
                     print(f"querying range {current_height} - {query_lower_bound}")
-                    results: List[Raw | None] = await asyncio.gather(
-                        *[
-                            get_data_historical(session, chain, h)
-                            for h in range(current_height, query_lower_bound, -1)
-                        ]
-                    )
-                    async with pool.acquire() as conn2:
-                        for res in results:
-                            if res:
-                                await upsert_data(conn2, res)
+                    tasks = [
+                        get_data_historical(session, chain, h)
+                        for h in range(current_height, query_lower_bound, -1)
+                    ]
+                    await run_and_upsert_tasks(tasks, pool)
+
                     print("data upserted")
                     current_height = query_lower_bound
     print("finish backfill task")
@@ -80,40 +82,14 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
 async def get_data_historical(
     session: ClientSession, chain: CosmosChain, height: int
 ) -> Raw | None:
-    raw = Raw()
     print(f"pulling new data {height}")
     block_res_json = await chain.get_block(session, height=height)
     print(f"block returned {height}")
     if block_res_json is not None:
-        raw.parse_block(block_res_json)
-        if raw.block and raw.height:
-            if raw.block_tx_count > 0:
-                print(f"getting tx {height}")
-                tx_res_json = await chain.get_block_txs(
-                    session=session,
-                    height=raw.height,
-                )
-                print(f"returned tx {height}")
-                if tx_res_json is not None and "tx_responses" in tx_res_json:
-                    tx_responses = tx_res_json["tx_responses"]
-                    raw.parse_tx_responses(tx_responses)
-                    if raw.block_tx_count != raw.tx_responses_tx_count:
-                        return Raw(
-                            block_tx_count=raw.block_tx_count,
-                            tx_responses_tx_count=0,
-                            block=raw.block,
-                        )
-                else:
-                    print("tx_response is not a key or tx_res_json is none")
-                    return Raw(
-                        block_tx_count=raw.block_tx_count,
-                        tx_responses_tx_count=0,
-                        block=raw.block,
-                    )
-        else:
-            print("block data is None")
-            return None
-    return raw
+        return await process_block(block_res_json, session, chain)
+    else:
+        print("block data is None")
+        return None
 
 
 if __name__ == "__main__":

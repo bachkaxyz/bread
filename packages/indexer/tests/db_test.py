@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from typing import List, Set, Tuple
@@ -75,15 +76,16 @@ async def test_upsert_data(
 ):
     async with mock_pool.acquire() as conn:
         conn: Connection
+        await drop_tables(conn, mock_schema)
         await create_tables(conn, mock_schema)
-        for data in raws:
-            assert True == await upsert_data(conn, data)
 
-        raw_results = await conn.fetch("select * from raw")
+        await asyncio.gather(*[upsert_data(mock_pool, raw) for raw in raws])
 
-        block_results = await conn.fetch("select * from blocks")
+        raw_results = await conn.fetch("select * from raw order by height asc")
 
-        tx_results = await conn.fetch("select * from txs")
+        block_results = await conn.fetch("select * from blocks order by height asc")
+
+        tx_results = await conn.fetch("select * from txs order by height asc")
 
         log_results = await conn.fetch("select * from logs")
 
@@ -109,8 +111,12 @@ async def test_upsert_data(
                 assert b == r
 
     txs: List[Tx] = []
+
     [txs.extend(raw.txs) for raw in raws]
-    for tx, res_tx in zip(txs, tx_results):
+    for tx, res_tx in zip(
+        sorted(txs, key=lambda x: x.txhash),
+        sorted(tx_results, key=lambda x: x["txhash"]),
+    ):
         res_tx_parsed = Tx(
             txhash=res_tx["txhash"],
             height=res_tx["height"],
@@ -140,7 +146,10 @@ async def test_upsert_data(
 
     logs: List[Log] = []
     [logs.extend(raw.logs) for raw in raws]
-    for log, res_log in zip(logs, log_results):
+    for log, res_log in zip(
+        sorted(logs, key=lambda x: x.txhash),
+        sorted(log_results, key=lambda x: x["txhash"]),
+    ):
         parsed = json.loads(res_log["parsed"])
         formatted_log = {f"{e}_{a}": v for (e, a), v in log.event_attributes.items()}
         assert {} == DeepDiff(formatted_log, parsed)
@@ -170,14 +179,13 @@ async def test_upsert_data(
 async def test_get_missing_blocks(
     raws: List[Raw], mock_pool: Pool, mock_schema: str, mock_chain: CosmosChain
 ):
-    heights = []
     async with mock_pool.acquire() as conn:
         conn: Connection
+        await drop_tables(conn, mock_schema)
         await create_tables(conn, mock_schema)
-        for data in raws:
-            if data.height:
-                heights.append(data.height)
-            assert True == await upsert_data(conn, data)
+
+        await asyncio.gather(*[upsert_data(mock_pool, raw) for raw in raws])
+
         mock_chain.chain_id = "jackal-1"
 
         async with conn.transaction():
@@ -192,8 +200,7 @@ async def test_get_missing_blocks(
 
 
 async def upsert_invalid_data(mock_pool: Pool):
-    async with mock_pool.acquire() as conn:
-        assert False == await upsert_data(conn, Raw(height=None))
+    assert False == await upsert_data(mock_pool, Raw(height=None))
 
     async with mock_pool.acquire() as conn:
         with pytest.raises(ChainDataIsNoneError):

@@ -23,3 +23,4 @@ async def main(f: Callable[[ClientSession, CosmosChain, Pool], Coroutine]):
             chain = await get_chain_from_environment(session)
             while True:
                 await f(session, chain, pool)
+                await asyncio.sleep(chain.time_between_blocks)

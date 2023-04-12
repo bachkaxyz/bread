@@ -4,7 +4,7 @@ from typing import List
 from indexer.parser import Log, Raw, parse_log_event, parse_logs
 import pytest
 
-from indexer.exceptions import BlockNotParsedError
+from indexer.exceptions import BlockPrimaryKeyNotDefinedError
 
 
 @pytest.fixture(scope="module")
@@ -123,5 +123,5 @@ def test_parsing(raws: List[Raw], unparsed_raw_data):
 
 def test_parse_tx_before_block_error(raw_tx):
     raw = Raw()
-    with pytest.raises(BlockNotParsedError):
+    with pytest.raises(BlockPrimaryKeyNotDefinedError):
         raw.parse_tx_responses(raw_tx)

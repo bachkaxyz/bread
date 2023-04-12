@@ -98,16 +98,8 @@ class CosmosChain:
                         return cur_api, await self.get_json(resp)
                     else:
                         raise APIResponseError("API Response Not Valid")
-            except APIResponseError as e:
-                print(f"failed to get {cur_api}{endpoint}")
-                self.add_api_miss(cur_api)
-                self.iterate_api()
-            except ConnectionRefusedError as e:
-                print(f"connection refused error {cur_api}{endpoint}")
-                self.add_api_miss(cur_api)
-                self.iterate_api()
-            except ClientError as e:
-                print(f"aiohttp client error {cur_api}{endpoint}")
+            except BaseException as e:
+                print(f"error {cur_api}{endpoint}")
                 traceback.print_exc()
 
                 self.add_api_miss(cur_api)
@@ -181,7 +173,7 @@ class CosmosChain:
 
     async def get_lowest_height(self, session: ClientSession):
         async with session.get(
-            self.get_next_api() + self.blocks_endpoint.format(1)
+            f"{self.get_next_api()}{self.blocks_endpoint.format(1)}"
         ) as block_res:
             block_res_json = json.loads(await block_res.read())
             lowest_height = (

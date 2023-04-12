@@ -20,6 +20,19 @@ async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
         ) as dif
         where difference_per_block <> 1
         order by height desc
+        limit 100
+        """,
+        chain.chain_id,
+    ):
+        yield record
+
+
+async def wrong_tx_count_cursor(conn: Connection, chain: CosmosChain):
+    async for record in conn.cursor(
+        """
+        select height, block_tx_count, chain_id
+        from raw
+        where tx_tx_count <> block_tx_count and chain_id = $1
         """,
         chain.chain_id,
     ):
@@ -42,17 +55,19 @@ async def create_tables(conn: Connection, schema: str):
         await conn.execute(f.read().replace("$schema", schema))
 
 
-async def upsert_data(conn: Connection, raw: Raw) -> bool:
+async def upsert_data(pool: Pool, raw: Raw) -> bool:
     if raw.height is not None and raw.chain_id is not None and raw.block is not None:
-        await insert_raw(conn, raw)
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await insert_raw(conn, raw)
 
-        await insert_block(conn, raw)
+                await insert_block(conn, raw)
 
-        await insert_many_txs(conn, raw)
+                await insert_many_txs(conn, raw)
 
-        await insert_many_log_columns(conn, raw)
+                await insert_many_log_columns(conn, raw)
 
-        await insert_many_logs(conn, raw)
+                await insert_many_logs(conn, raw)
 
         print(f"{raw.height=} inserted")
         return True
