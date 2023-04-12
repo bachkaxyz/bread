@@ -26,13 +26,19 @@ async def test_live(
     mock_pool: Pool,
     mocker,
 ):
-    async with mock_pool.acquire() as conn:
-        await create_tables(conn, mock_schema)
-    mocker.patch("indexer.live.get_data_live", return_value=raws[0])
-    await live(mock_client, mock_chain, mock_pool)
+    raw = raws[0]
+    if raw and raw.chain_id:
+        async with mock_pool.acquire() as conn:
+            await drop_tables(conn, mock_schema)
+            await create_tables(conn, mock_schema)
+            assert True == await upsert_data(mock_pool, raw)
 
-    async with mock_pool.acquire() as conn:
-        await drop_tables(conn, mock_schema)
+        mock_chain.chain_id = raw.chain_id
+        mocker.patch("indexer.live.get_data_live", return_value=raws[1])
+        await live(mock_client, mock_chain, mock_pool)
+
+        async with mock_pool.acquire() as conn:
+            await drop_tables(conn, mock_schema)
 
     mocker.resetall()
 

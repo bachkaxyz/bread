@@ -136,3 +136,21 @@ async def insert_many_logs(conn: Connection, raw: Raw):
                 """,
         raw.get_logs_db_params(),
     )
+
+
+async def get_max_height(conn: Connection, chain: CosmosChain) -> int:
+    res = await conn.fetchval(
+        """
+        select max(height)
+        from raw
+        where chain_id = $1
+        """,
+        chain.chain_id,
+        column=0,
+    )
+    print(res)
+    if res:
+        return res
+    else:
+        # if max height doesn't exist
+        return 0

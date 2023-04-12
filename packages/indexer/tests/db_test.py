@@ -4,11 +4,7 @@ import os
 from typing import List, Set, Tuple
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
-from indexer.db import (
-    create_tables,
-    drop_tables,
-    upsert_data,
-)
+from indexer.db import create_tables, drop_tables, upsert_data, get_max_height
 from indexer.parser import Block, Raw, Tx, Log
 from deepdiff import DeepDiff
 
@@ -205,3 +201,23 @@ async def upsert_invalid_data(mock_pool: Pool):
     async with mock_pool.acquire() as conn:
         with pytest.raises(ChainDataIsNoneError):
             await insert_block(conn, Raw())
+
+
+async def test_db_max_height(
+    raws: List[Raw],
+    mock_schema: str,
+    mock_client: ClientSession,
+    mock_chain: CosmosChain,
+    mock_pool: Pool,
+    mocker,
+):
+    raw = raws[0]
+    if raw and raw.chain_id:
+        async with mock_pool.acquire() as conn:
+            await drop_tables(conn, mock_schema)
+            await create_tables(conn, mock_schema)
+            assert True == await upsert_data(mock_pool, raw)
+
+        mock_chain.chain_id = raw.chain_id
+        async with mock_pool.acquire() as conn:
+            assert raws[0].height == await get_max_height(conn, mock_chain)
