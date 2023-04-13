@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "jobs"
+version = "0.1.0"
+description = ""
+authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.10.*"
+dagster = "^1.2.7"
+dagit = "^1.2.7"
+dbt-core = "^1.4.5"
+dbt-postgres = "^1.4.5"
+dagster-dbt = "^0.18.7"
+pandas = "^2.0.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.dagster]
+module_name = "jobs.pipeline"
