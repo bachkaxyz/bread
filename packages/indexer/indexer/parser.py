@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import json
 import time
-from typing import List
+from typing import Dict, List, Set, Tuple
 from aiohttp import ClientSession
 from asyncpg import Connection
 
@@ -15,22 +15,30 @@ DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 @dataclass
 class Log:
+    """Log object to store all the logs from a transaction"""
     txhash: str
     failed_msg: str | None = None
     failed: bool = False
     msg_index: int = 0
     event_attributes = defaultdict(list)
 
-    def get_cols(self):
+    def get_cols(self) -> Set(Tuple(str, str)):
+        """Gets all the columns in the log object"""
         return set(self.event_attributes.keys())
 
     def fix_entries(self):
+        """Fixes all entries in the log object inplace"""
         self.event_attributes = {
             (fix_entry(k[0]), fix_entry(k[1])): [fix_entry(v) for v in vs]
             for k, vs in self.event_attributes.items()
         }
 
-    def dump(self):
+    def dump(self) -> str:
+        """Dumps the log object into a json string
+
+        Returns:
+            str: json string of the log object
+        """
         final = defaultdict(list)
         for k, v in self.event_attributes.items():
             event, attr = k
@@ -38,6 +46,7 @@ class Log:
         return json.dumps(final)
 
     def get_log_db_params(self):
+        """Helper function to get the parameters for the database"""
         return (
             self.txhash,
             str(self.msg_index),
@@ -48,6 +57,15 @@ class Log:
 
 
 def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
+    """Parses the logs from a transaction into a list of Log objects
+
+    Args:
+        raw_logs (str): raw logs to parse
+        txhash (str): transaction hash of the transaction that the logs are from
+
+    Returns:
+        List[Log]: list of parsed Log objects
+    """
     logs: List[Log] = []
     json_raw_logs: dict = {}
     try:  # try to parse the logs as json, if it fails, it's a string error message (i dont like this but....)
@@ -67,7 +85,15 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
     return logs
 
 
-def parse_log_event(event: dict):
+def parse_log_event(event: dict) -> Dict[(str, str), List[str]]:
+    """Parses a log event into a dictionary of event attributes
+
+    Args:
+        event (dict): event to parse
+
+    Returns:
+        Dict[(str, str), List[str]]: Dictionary of parsed event attributes from a log
+    """
     log_dic = defaultdict(list)
     event_type = event["type"]
     if event_type == "wasm":
@@ -88,11 +114,13 @@ def parse_log_event(event: dict):
 
 
 def fix_entry(s) -> str:
+    """Fixes a string to be a valid postgres column name"""
     return str(s).replace(".", "_").replace("/", "_").replace("-", "_").replace("@", "")
 
 
 @dataclass
 class Block:
+    """Parsed block data"""
     height: int
     chain_id: str
     time: datetime
@@ -100,6 +128,7 @@ class Block:
     proposer_address: str
 
     def get_db_params(self):
+        """Helper function to get the parameters for the database"""
         return (
             self.chain_id,
             self.height,
@@ -111,6 +140,7 @@ class Block:
 
 @dataclass
 class Tx:
+    """Stores the data for a transaction"""
     txhash: str
     chain_id: str
     height: int
@@ -126,6 +156,7 @@ class Tx:
     timestamp: datetime
 
     def get_db_params(self):
+        """Helper function to get the parameters for the database"""
         return (
             self.txhash,
             self.chain_id,
@@ -145,6 +176,8 @@ class Tx:
 
 @dataclass
 class Raw:
+    """Stores the raw data from the chain and parses it into their dataclasses"""
+    
     height: int | None = None
     chain_id: str | None = None
 
@@ -160,6 +193,11 @@ class Raw:
     log_columns: set = field(default_factory=set)
 
     def parse_block(self, raw_block: dict):
+        """Parse a block from the raw block data
+
+        Args:
+            raw_block (dict): raw block data from the chain to parse
+        """
         self.raw_block = raw_block
 
         block = raw_block["block"]
@@ -187,6 +225,14 @@ class Raw:
         )
 
     def parse_tx_responses(self, raw_tx_responses: List[dict]):
+        """Process the raw tx responses from the chain into a raw object
+
+        Args:
+            raw_tx_responses (List[dict]): Data to parse
+
+        Raises:
+            BlockPrimaryKeyNotDefinedError: If the block primary key is not defined
+        """
         self.raw_tx = raw_tx_responses
         self.tx_responses_tx_count = len(raw_tx_responses)
         if self.chain_id and self.height:
@@ -223,6 +269,7 @@ class Raw:
             )
 
     def get_raw_db_params(self):
+        """Helper function to get the parameters for the database"""
         return (
             self.chain_id,
             self.height,
@@ -233,12 +280,15 @@ class Raw:
         )
 
     def get_txs_db_params(self):
+        """Helper function to get the parameters for the database"""
         return [tx.get_db_params() for tx in self.txs]
 
     def get_log_columns_db_params(self):
+        """Helper function to get the parameters for the database"""
         return [[e, a] for e, a in self.log_columns]
 
     def get_logs_db_params(self):
+        """Helper function to get the parameters for the database"""
         return [log.get_log_db_params() for log in self.logs]
 
 
@@ -272,16 +322,30 @@ class Raw:
 #     return msgs, msg_cols
 
 
-async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain):
+async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Raw:
+    """Query and process transactions from raw block
+
+    Args:
+        raw (Raw): Raw block to process transactions for
+        session (ClientSession): Client session to use for querying
+        chain (CosmosChain): Chain to query for transactions
+
+    Returns:
+        (Raw): Raw block
+    """
+    
+    # these are the fields required to process transactions
     if raw.height is not None and raw.block_tx_count != 0:
         tx_res_json = await chain.get_block_txs(
             session=session,
             height=raw.height,
         )
 
+        # check that transactions exist
         if tx_res_json is not None and "tx_responses" in tx_res_json:
             tx_responses = tx_res_json["tx_responses"]
             raw.parse_tx_responses(tx_responses)
+            # check that the number of transactions in the block matches the number of transactions in the tx_responses
             if raw.block_tx_count == raw.tx_responses_tx_count:
                 return raw
             else:
@@ -313,6 +377,16 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain):
 async def process_block(
     block_raw_data: dict, session: ClientSession, chain: CosmosChain
 ) -> Raw:
+    """Processes the raw block data and returns a Raw object
+
+    Args:
+        block_raw_data (dict): Block data to process from the chain
+        session (ClientSession): Client session to use for requests
+        chain (CosmosChain): CosmosChain object to use for requests
+
+    Returns:
+        Raw: Raw object with the processed data
+    """
     raw = Raw()
     raw.parse_block(block_raw_data)
     if raw.block and raw.height and raw.block_tx_count > 0:

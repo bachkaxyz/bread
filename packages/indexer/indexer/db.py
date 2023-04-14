@@ -11,6 +11,11 @@ from indexer.parser import Raw
 
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
+    """
+    Generator that yields missing blocks from the database
+    
+    limit of 100 is to prevent the generator from yielding too many results to keep live data more up to date
+    """
     async for record in conn.cursor(
         """
         select height, difference_per_block from (
@@ -28,6 +33,9 @@ async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
 
 
 async def wrong_tx_count_cursor(conn: Connection, chain: CosmosChain):
+    """
+    Generator that yields blocks with wrong tx counts from the database
+    """
     async for record in conn.cursor(
         """
         select height, block_tx_count, chain_id
@@ -45,9 +53,11 @@ async def drop_tables(conn: Connection, schema: str):
 
 
 async def create_tables(conn: Connection, schema: str):
+    # we use the path of your current directory to get the absolute path of the sql files depending on where the script is run from
     cur_dir = os.path.dirname(__file__)
     file_path = os.path.join(cur_dir, "sql/create_tables.sql")
     with open(file_path, "r") as f:
+        # our schema in .sql files is defined as $schema so we replace it with the actual schema name
         await conn.execute(f.read().replace("$schema", schema))
 
     file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
@@ -56,10 +66,24 @@ async def create_tables(conn: Connection, schema: str):
 
 
 async def upsert_data(pool: Pool, raw: Raw) -> bool:
+    """Upsert a blocks data into the database
+
+    Args:
+        pool (Pool): The database connection pool
+        raw (Raw): The raw data to upsert
+
+    Returns:
+        bool: True if the data was upserted, False if the data was not upserted
+    """
+    
+    # we check if the data is valid before upserting it
     if raw.height is not None and raw.chain_id is not None:
         async with pool.acquire() as conn:
+            # we do all the upserts in a transaction so that if one fails, all of them fail
             async with conn.transaction():
                 await insert_raw(conn, raw)
+                
+                # we are checking if the block is not None because we might only have the tx data and not the block data
                 if raw.block is not None:
                     print("raw block height", raw.block.height)
                     await insert_block(conn, raw)
@@ -79,6 +103,9 @@ async def upsert_data(pool: Pool, raw: Raw) -> bool:
 
 
 async def insert_raw(conn: Connection, raw: Raw):
+    
+    
+    # the on conflict clause is used to update the tx_responses and tx_tx_count columns if the raw data already exists but the tx data is new
     await conn.execute(
         f"""
                 INSERT INTO raw(chain_id, height, block, block_tx_count, tx_responses, tx_tx_count)
@@ -139,6 +166,7 @@ async def insert_many_logs(conn: Connection, raw: Raw):
 
 
 async def get_max_height(conn: Connection, chain: CosmosChain) -> int:
+    """Get the max height of the chain from the database"""
     res = await conn.fetchval(
         """
         select max(height)

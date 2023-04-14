@@ -41,18 +41,22 @@ class CosmosChain:
     async def get_json(self, resp: ClientResponse) -> dict:
         return json.loads(await resp.read())
 
-    def get_next_api(self):
+    def get_next_api(self) -> str:
+        """Get the next api to hit"""
         return list(self.apis.keys())[self.current_api_index]
 
     def add_api_miss(self, api: str):
+        """Add a miss to the api"""
         index = list(self.apis.keys()).index(api)
         list(self.apis.values())[index]["miss"] += 1
 
     def add_api_hit(self, api: str):
+        """Add a hit to the api"""
         index = list(self.apis.keys()).index(api)
         list(self.apis.values())[index]["hit"] += 1
 
     def iterate_api(self):
+        """Iterate the current api index"""
         self.current_api_index = (self.current_api_index + 1) % len(self.apis)
 
     def remove_api(self, api: str):
@@ -204,7 +208,18 @@ async def get_chain_registry_info(
         return chain_id, apis
 
 
-async def get_chain_info(session) -> Tuple[str, Dict[str, dict]]:
+async def get_chain_info(session: ClientSession) -> Tuple[str, Dict[str, dict]]:
+    """Get chain info from environment variables
+
+    Args:
+        session (ClientSession): Aiohttp Session to query from
+
+    Raises:
+        EnvironmentError: If environment variables are not set
+
+    Returns:
+        Tuple[str, Dict[str, dict]]: _description_
+    """
     chain_registry_name = os.getenv("CHAIN_REGISTRY_NAME", None)
     load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", "True").upper() == "TRUE"
     apis = set()  # don't add duplicate apis
@@ -235,7 +250,7 @@ async def get_chain_info(session) -> Tuple[str, Dict[str, dict]]:
 async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
     """Creates a CosmosChain based on environment config
 
-    future note: I did not override __init__ due to potential other use cases for CosmosChain
+    I did not override __init__ due to potential other use cases for using the CosmosChain class to query chain data
 
     Args:
         session (ClientSession): session to query external requests from
