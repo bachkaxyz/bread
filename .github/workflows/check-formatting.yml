@@ -1,0 +1,16 @@
+name: Correct Code Formatting
+
+on: [push, pull_request]
+
+jobs:
+    BlackCodeFormatCheck:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+
+            - uses: psf/black@stable
+              name: Check code formatting
+              with:
+                options: "--check --verbose"
+                src: "./src"
+                version: "~= 22.0"
