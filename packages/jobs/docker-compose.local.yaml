@@ -1,0 +1,19 @@
+services:
+  dagster:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dagster
+    volumes:
+      - .:/jobs
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./../../.env
+      - .env
+    command: poetry run dagster dev -p 3000 -h 0.0.0.0
+networks:
+  default:
+    name: sn-mono-network
+    driver: bridge
+    external: true
