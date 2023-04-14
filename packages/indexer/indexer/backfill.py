@@ -56,7 +56,7 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                 raw_tasks.append(process_tx(raw, session, chain))
 
                 # we are batching the txs to be processed for performance
-                if len(raw_tasks) > 20:
+                if len(raw_tasks) > chain.batch_size:
                     await run_and_upsert_tasks(raw_tasks, pool)
                     raw_tasks = []
 
@@ -77,14 +77,13 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
 
                     # if the lowest block in the database is not the min block height, then we need to backfill the missing blocks
                     # we are only backfilling 20 blocks at a time to avoid timeouts and to backfill more recent blocks first
-                    if height - 20 > lowest_height:
-                        dif = 20
+                    if height - chain.batch_size > lowest_height:
+                        dif = chain.batch_size
                     else:
                         dif = height - lowest_height
                 print(height, dif)
                 
-                # we are querying 10 blocks at a time to avoid timeouts
-                step_size = 10 
+                # we are querying 10 blocks at a time to avoid timeouts 
                 max_height = height - 1
                 min_height = height - dif # the min height to query during this iteration
                 current_height = max_height
@@ -93,8 +92,8 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                     print(f"{current_height}")
                     
                     # check if the next iteration will be less than the min height and set lower bound accordingly
-                    if current_height - step_size > min_height:
-                        query_lower_bound = current_height - step_size
+                    if current_height - chain.step_size > min_height:
+                        query_lower_bound = current_height - chain.step_size
                     else:
                         query_lower_bound = min_height
                     print(f"querying range {current_height} - {query_lower_bound}")

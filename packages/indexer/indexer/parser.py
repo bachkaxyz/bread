@@ -22,7 +22,7 @@ class Log:
     msg_index: int = 0
     event_attributes = defaultdict(list)
 
-    def get_cols(self) -> Set(Tuple(str, str)):
+    def get_cols(self) -> Set[Tuple[str, str]]:
         """Gets all the columns in the log object"""
         return set(self.event_attributes.keys())
 
@@ -85,14 +85,14 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
     return logs
 
 
-def parse_log_event(event: dict) -> Dict[(str, str), List[str]]:
+def parse_log_event(event: dict) -> Dict[Tuple[str, str], List[str]]:
     """Parses a log event into a dictionary of event attributes
 
     Args:
         event (dict): event to parse
 
     Returns:
-        Dict[(str, str), List[str]]: Dictionary of parsed event attributes from a log
+        Dict[Tuple[str, str], List[str]]: Dictionary of parsed event attributes from a log
     """
     log_dic = defaultdict(list)
     event_type = event["type"]

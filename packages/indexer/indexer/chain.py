@@ -18,6 +18,8 @@ class CosmosChain:
     apis: Dict[str, Dict[str, int]]
     current_api_index: int = 0
     time_between_blocks: int = 1
+    batch_size: int = 20
+    step_size: int = 10
 
     async def is_valid_response(self, resp: ClientResponse) -> bool:
         """Check if the response is in the correct format
@@ -263,10 +265,14 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
     """
     chain_id, apis = await get_chain_info(session)
     time_between = os.getenv("TIME_BETWEEN_BLOCKS", "1")
+    batch_size = os.getenv("BATCH_SIZE", "20")
+    step_size = os.getenv("STEP_SIZE", "10")
     try:
         time_between = int(time_between)
+        batch_size = int(batch_size)
+        step_size = int(step_size)
     except OSError as e:
-        raise EnvironmentError("TIME_BETWEEN_BLOCKS is not of type int")
+        raise EnvironmentError("Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int")
     chain = CosmosChain(
         chain_id=chain_id,
         blocks_endpoint=os.getenv(
@@ -277,5 +283,7 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
         ),
         apis=apis,
         time_between_blocks=time_between,
+        batch_size=batch_size,
+        step_size=step_size,
     )
     return chain
