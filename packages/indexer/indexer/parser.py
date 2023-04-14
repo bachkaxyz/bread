@@ -16,6 +16,7 @@ DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 @dataclass
 class Log:
     """Log object to store all the logs from a transaction"""
+
     txhash: str
     failed_msg: str | None = None
     failed: bool = False
@@ -121,6 +122,7 @@ def fix_entry(s) -> str:
 @dataclass
 class Block:
     """Parsed block data"""
+
     height: int
     chain_id: str
     time: datetime
@@ -141,6 +143,7 @@ class Block:
 @dataclass
 class Tx:
     """Stores the data for a transaction"""
+
     txhash: str
     chain_id: str
     height: int
@@ -177,7 +180,7 @@ class Tx:
 @dataclass
 class Raw:
     """Stores the raw data from the chain and parses it into their dataclasses"""
-    
+
     height: int | None = None
     chain_id: str | None = None
 
@@ -333,7 +336,7 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
     Returns:
         (Raw): Raw block
     """
-    
+
     # these are the fields required to process transactions
     if raw.height is not None and raw.block_tx_count != 0:
         tx_res_json = await chain.get_block_txs(

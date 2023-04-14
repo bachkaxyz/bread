@@ -10,7 +10,9 @@ from indexer.parser import Raw, process_tx, process_block
 min_block_height = 116001
 
 
-async def run_and_upsert_tasks(raw_tasks: List[Future | Generator | Awaitable], pool: Pool):
+async def run_and_upsert_tasks(
+    raw_tasks: List[Future | Generator | Awaitable], pool: Pool
+):
     """Processing a list of coroutines and upserting the results  into the database.
 
     Args:
@@ -51,8 +53,8 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                     block_tx_count=block_tx_count,
                     chain_id=chain_id,
                 )
-                # since the block has already been processed, we can just process the txs 
-                
+                # since the block has already been processed, we can just process the txs
+
                 raw_tasks.append(process_tx(raw, session, chain))
 
                 # we are batching the txs to be processed for performance
@@ -63,11 +65,11 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
             # process the remaining txs
             await run_and_upsert_tasks(raw_tasks, pool)
             raw_tasks = []
-            
+
             # check for missing blocks
             async for (height, dif) in missing_blocks_cursor(cursor_conn, chain):
                 print(f"{height=} {dif=}")
-                
+
                 # if dif is -1, then the block is the lowest block in the database
                 if dif == -1:
                     print("min block in db")
@@ -82,22 +84,24 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                     else:
                         dif = height - lowest_height
                 print(height, dif)
-                
-                # we are querying 10 blocks at a time to avoid timeouts 
+
+                # we are querying 10 blocks at a time to avoid timeouts
                 max_height = height - 1
-                min_height = height - dif # the min height to query during this iteration
+                min_height = (
+                    height - dif
+                )  # the min height to query during this iteration
                 current_height = max_height
                 # query in batches while the current height is greater than the min height
                 while current_height > min_height:
                     print(f"{current_height}")
-                    
+
                     # check if the next iteration will be less than the min height and set lower bound accordingly
                     if current_height - chain.step_size > min_height:
                         query_lower_bound = current_height - chain.step_size
                     else:
                         query_lower_bound = min_height
                     print(f"querying range {current_height} - {query_lower_bound}")
-                    
+
                     # query and process the blocks in the range
                     tasks = [
                         get_data_historical(session, chain, h)

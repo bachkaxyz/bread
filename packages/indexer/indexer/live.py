@@ -20,16 +20,16 @@ async def live(session: ClientSession, chain: CosmosChain, pool: Pool):
     global current_height
     print("pulling live data")
     print(f"{current_height=}")
-    
+
     # since we are using a global variable, we need to check if it is 0 and if so, get the max height from the database
     if current_height == 0:
         async with pool.acquire() as conn:
             current_height = await get_max_height(conn, chain)
     print(f"{current_height=}")
-    
+
     # get the latest block from the chain
     raw = await get_data_live(session, chain, current_height)
-    
+
     # if the latest block is defined and it is new, upsert it into the database
     if raw and raw.height and raw.height > current_height:
         current_height = raw.height

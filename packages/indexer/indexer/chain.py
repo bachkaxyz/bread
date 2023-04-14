@@ -272,7 +272,9 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
         batch_size = int(batch_size)
         step_size = int(step_size)
     except OSError as e:
-        raise EnvironmentError("Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int")
+        raise EnvironmentError(
+            "Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int"
+        )
     chain = CosmosChain(
         chain_id=chain_id,
         blocks_endpoint=os.getenv(
