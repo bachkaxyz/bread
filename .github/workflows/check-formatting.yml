@@ -1,6 +1,6 @@
 name: Correct Code Formatting
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
     BlackCodeFormatCheck:
