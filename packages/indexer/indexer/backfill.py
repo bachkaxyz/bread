@@ -1,6 +1,6 @@
 import asyncio
 from asyncio import Future
-from typing import List, Generator, Awaitable
+from typing import Any, Coroutine, List, Generator, Awaitable
 from aiohttp import ClientSession
 from asyncpg import Pool, Connection
 from indexer.chain import CosmosChain
@@ -11,7 +11,7 @@ min_block_height = 116001
 
 
 async def run_and_upsert_tasks(
-    raw_tasks: List[Future | Generator | Awaitable], pool: Pool
+    raw_tasks: List[Coroutine[Any, Any, Raw | None]], pool: Pool
 ):
     """Processing a list of coroutines and upserting the results  into the database.
 
@@ -103,7 +103,7 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                     print(f"querying range {current_height} - {query_lower_bound}")
 
                     # query and process the blocks in the range
-                    tasks = [
+                    tasks: List[Coroutine] = [
                         get_data_historical(session, chain, h)
                         for h in range(current_height, query_lower_bound, -1)
                     ]
