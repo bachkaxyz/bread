@@ -1,13 +1,6 @@
 version: '3'
 services:
-  indexer-live:
-    image: indexer-dev
-    env_file:
-      - .env
-      - ./../../.env
-    volumes:
-      - ./:/indexer
-  indexer-backfill:
+  indexer:
     image: indexer-dev
     env_file:
       - .env

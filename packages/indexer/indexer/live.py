@@ -1,11 +1,8 @@
-import json
-import os, asyncio
 from aiohttp import ClientSession
-from asyncpg import Pool, create_pool, Connection
-from indexer.chain import LATEST, CosmosChain, get_chain_from_environment
-from indexer.db import create_tables, upsert_data, get_max_height
+from asyncpg import Pool
+from indexer.chain import LATEST, CosmosChain
+from indexer.db import upsert_data, get_max_height
 from indexer.parser import Raw
-from indexer.main import main
 from indexer.parser import process_block
 
 current_height = 0
@@ -42,7 +39,3 @@ async def get_data_live(
     else:
         print("block data is none")
         return None
-
-
-if __name__ == "__main__":
-    asyncio.run(main(live))

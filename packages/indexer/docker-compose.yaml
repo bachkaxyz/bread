@@ -1,18 +1,10 @@
 version: '3'
 services:
-  indexer-live:
+  indexer:
     build:
       context: .
       dockerfile: Dockerfile
     image: indexer-prod
-    container_name: indexer-live
-    command: python indexer/live.py
-    working_dir: /indexer
-  indexer-backfill:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: indexer-prod
-    container_name: indexer-backfill
-    command: python indexer/backfill.py
+    container_name: indexer
+    command: python indexer/main.py
     working_dir: /indexer

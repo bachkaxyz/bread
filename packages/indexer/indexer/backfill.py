@@ -1,16 +1,16 @@
 import asyncio
-from typing import Any, List
+from asyncio import Future
+from typing import List, Generator, Awaitable
 from aiohttp import ClientSession
 from asyncpg import Pool, Connection
 from indexer.chain import CosmosChain
 from indexer.db import missing_blocks_cursor, wrong_tx_count_cursor, upsert_data
 from indexer.parser import Raw, process_tx, process_block
-from indexer.main import main
 
 min_block_height = 116001
 
 
-async def run_and_upsert_tasks(raw_tasks: list, pool: Pool):
+async def run_and_upsert_tasks(raw_tasks: List[Future | Generator | Awaitable], pool: Pool):
     results: List[Raw | None] = await asyncio.gather(*raw_tasks)
     upsert_tasks = []
     for res in results:
@@ -90,7 +90,3 @@ async def get_data_historical(
     else:
         print("block data is None")
         return None
-
-
-if __name__ == "__main__":
-    asyncio.run(main(backfill))

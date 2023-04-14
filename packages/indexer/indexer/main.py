@@ -4,12 +4,21 @@ from typing import Any, Awaitable, Callable, Coroutine
 from aiohttp import ClientSession
 
 from asyncpg import Pool, create_pool
+from indexer.backfill import backfill
 
 from indexer.chain import get_chain_from_environment, CosmosChain
 from indexer.db import create_tables
+from indexer.live import live
 
 
-async def main(f: Callable[[ClientSession, CosmosChain, Pool], Coroutine]):
+async def run(pool: Pool, f: Callable[[ClientSession, CosmosChain, Pool], Coroutine]):
+    async with ClientSession() as session:
+        chain = await get_chain_from_environment(session)
+        while True:
+            await f(session, chain, pool)
+            await asyncio.sleep(chain.time_between_blocks)
+
+async def main():
     schema_name = os.getenv("INDEXER_SCHEMA", "public")
     async with create_pool(
         host=os.getenv("POSTGRES_HOST"),
@@ -21,8 +30,8 @@ async def main(f: Callable[[ClientSession, CosmosChain, Pool], Coroutine]):
     ) as pool:
         async with pool.acquire() as conn:
             await create_tables(conn, schema_name)
-        async with ClientSession() as session:
-            chain = await get_chain_from_environment(session)
-            while True:
-                await f(session, chain, pool)
-                await asyncio.sleep(chain.time_between_blocks)
+
+        await asyncio.gather(run(pool, live), run(pool, backfill))
+
+if __name__ == "__main__":
+    asyncio.run(main())
