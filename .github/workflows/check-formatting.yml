@@ -11,6 +11,4 @@ jobs:
             - uses: psf/black@stable
               name: Check code formatting
               with:
-                options: "--check --verbose"
-                src: "./src"
-                version: "~= 22.0"
+                options: "--check --verbose ."
