@@ -1,10 +1,10 @@
-import asyncio, json, traceback
+import json, traceback
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Tuple
-from aiohttp import ClientError, ClientResponse, ClientSession
-
+from aiohttp import ClientResponse, ClientSession
 from indexer.exceptions import APIResponseError
+import logging
 
 ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"
@@ -105,8 +105,8 @@ class CosmosChain:
                     else:
                         raise APIResponseError("API Response Not Valid")
             except BaseException as e:
-                print(f"error {cur_api}{endpoint}")
-                traceback.print_exc()
+                logger = logging.getLogger("indexer")
+                logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
 
                 self.add_api_miss(cur_api)
                 self.iterate_api()
@@ -224,14 +224,15 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, Dict[str, dict]]:
     """
     chain_registry_name = os.getenv("CHAIN_REGISTRY_NAME", None)
     load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", "True").upper() == "TRUE"
+    logger = logging.getLogger("indexer")
     apis = set()  # don't add duplicate apis
     if chain_registry_name:
         chain_id, chain_registry_apis = await get_chain_registry_info(
             session, chain_registry_name
         )
-        print(load_external_apis)
+        logger.info(load_external_apis)
         if load_external_apis:
-            print("added external")
+            logger.info("added external")
             [apis.add(api) for api in chain_registry_apis]
     else:
         raise EnvironmentError(

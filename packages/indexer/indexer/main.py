@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from typing import Callable, Coroutine
 from aiohttp import ClientSession
@@ -9,6 +10,8 @@ from indexer.backfill import backfill
 from indexer.chain import get_chain_from_environment, CosmosChain
 from indexer.db import create_tables, drop_tables
 from indexer.live import live
+
+from logging import Logger
 
 
 async def run(pool: Pool, f: Callable[[ClientSession, CosmosChain, Pool], Coroutine]):
@@ -41,6 +44,24 @@ async def main():
         database=os.getenv("POSTGRES_DB"),
         server_settings={"search_path": schema_name},
     ) as pool:
+        # initialize logger
+
+        USE_LOG_FILE = os.getenv("USE_LOG_FILE", "TRUE").upper() == "TRUE"
+        if USE_LOG_FILE is False:
+            logging.basicConfig(
+                handlers=(logging.StreamHandler(),),
+                format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+                datefmt="%H:%M:%S",
+                level=logging.DEBUG,
+            )
+        else:
+            logging.basicConfig(
+                filename="indexer.log",
+                filemode="a",
+                format="%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s",
+                datefmt="%H:%M:%S",
+                level=logging.DEBUG,
+            )
         async with pool.acquire() as conn:
             DROP_TABLES_ON_STARTUP = (
                 os.getenv("DROP_TABLES_ON_STARTUP", "True").upper() == "TRUE"

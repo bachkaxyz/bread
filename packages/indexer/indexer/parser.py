@@ -6,9 +6,11 @@ import time
 from typing import Dict, List, Set, Tuple
 from aiohttp import ClientSession
 from asyncpg import Connection
+import logging
 
 from indexer.exceptions import BlockPrimaryKeyNotDefinedError
 from indexer.chain import CosmosChain
+
 
 DATE_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -336,7 +338,7 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
     Returns:
         (Raw): Raw block
     """
-
+    logger = logging.getLogger("indexer")
     # these are the fields required to process transactions
     if raw.height is not None and raw.block_tx_count != 0:
         tx_res_json = await chain.get_block_txs(
@@ -352,7 +354,7 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
             if raw.block_tx_count == raw.tx_responses_tx_count:
                 return raw
             else:
-                print("tx count not right")
+                logger.info("tx count not right")
                 return Raw(
                     height=raw.height,
                     chain_id=raw.chain_id,
@@ -363,7 +365,7 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
                 )
 
         else:
-            print("tx_response is not a key or tx_res_json is none")
+            logger.info("tx_response is not a key or tx_res_json is none")
             return Raw(
                 height=raw.height,
                 chain_id=raw.chain_id,
@@ -373,7 +375,9 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
                 raw_block=raw.raw_block,
             )
     else:
-        print("raw.height or raw.block_tx_count does not exist so cannot parse txs")
+        logger.info(
+            "raw.height or raw.block_tx_count does not exist so cannot parse txs"
+        )
         return raw
 
 
@@ -395,7 +399,6 @@ async def process_block(
     if raw.block and raw.height and raw.block_tx_count > 0:
         return await process_tx(raw, session, chain)
     else:
-        print("no txs")
         return Raw(
             height=raw.height,
             chain_id=raw.chain_id,

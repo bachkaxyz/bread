@@ -1,13 +1,9 @@
-import asyncio
-from dataclasses import dataclass
-import json
 import os
-from typing import Dict, List, Set, Tuple
-
 from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
 from indexer.exceptions import ChainDataIsNoneError
 from indexer.parser import Raw
+import logging
 
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
@@ -76,6 +72,7 @@ async def upsert_data(pool: Pool, raw: Raw) -> bool:
         bool: True if the data was upserted, False if the data was not upserted
     """
 
+    logger = logging.getLogger("indexer")
     # we check if the data is valid before upserting it
     if raw.height is not None and raw.chain_id is not None:
         async with pool.acquire() as conn:
@@ -85,7 +82,7 @@ async def upsert_data(pool: Pool, raw: Raw) -> bool:
 
                 # we are checking if the block is not None because we might only have the tx data and not the block data
                 if raw.block is not None:
-                    print("raw block height", raw.block.height)
+                    logger.info(f"raw block height {raw.block.height}")
                     await insert_block(conn, raw)
 
                 await insert_many_txs(conn, raw)
@@ -94,11 +91,11 @@ async def upsert_data(pool: Pool, raw: Raw) -> bool:
 
                 await insert_many_logs(conn, raw)
 
-        print(f"{raw.height=} inserted")
+        logger.info(f"{raw.height=} inserted")
         return True
 
     else:
-        print(f"{raw.height} {raw.chain_id} {raw.block}")
+        logger.info(f"{raw.height} {raw.chain_id} {raw.block}")
         return False
 
 
@@ -174,7 +171,8 @@ async def get_max_height(conn: Connection, chain: CosmosChain) -> int:
         chain.chain_id,
         column=0,
     )
-    print(res)
+    logger = logging.getLogger("indexer")
+    logger.info(res)
     if res:
         return res
     else:

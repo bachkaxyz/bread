@@ -6,6 +6,7 @@ from asyncpg import Pool, Connection
 from indexer.chain import CosmosChain
 from indexer.db import missing_blocks_cursor, wrong_tx_count_cursor, upsert_data
 from indexer.parser import Raw, process_tx, process_block
+import logging
 
 min_block_height = 116001
 
@@ -36,7 +37,8 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
         chain (CosmosChain): Chain object for making chain specific requests.
         pool (Pool): Database connection pool.
     """
-    print("starting backfill")
+    logger = logging.getLogger("indexer")
+    logger.info("backfill - starting backfill")
     async with pool.acquire() as cursor_conn:
         cursor_conn: Connection
 
@@ -47,7 +49,7 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
             async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
                 cursor_conn, chain
             ):
-                print(f"{height}, {block_tx_count}")
+                logger.info(f"backfill - wrong tx count for {height}, {block_tx_count}")
                 raw = Raw(
                     height=height,
                     block_tx_count=block_tx_count,
@@ -68,14 +70,15 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
 
             # check for missing blocks
             async for (height, dif) in missing_blocks_cursor(cursor_conn, chain):
-                print(f"{height=} {dif=}")
+                logger.info(f"backfill - missing block {height=} {dif=}")
 
                 # if dif is -1, then the block is the lowest block in the database
                 if dif == -1:
-                    print("min block in db")
+                    logger.info("backfill - min block in db reached")
 
                     # if the lowest block in the database is the min block height, then we are done
                     lowest_height = await chain.get_lowest_height(session)
+                    logger.info(f"lowest height {lowest_height=}")
 
                     # if the lowest block in the database is not the min block height, then we need to backfill the missing blocks
                     # we are only backfilling 20 blocks at a time to avoid timeouts and to backfill more recent blocks first
@@ -83,7 +86,9 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                         dif = chain.batch_size
                     else:
                         dif = height - lowest_height
-                print(height, dif)
+                logger.info(
+                    f"backfill - after processing state of indexer {height=}, {dif=}"
+                )
 
                 # we are querying 10 blocks at a time to avoid timeouts
                 max_height = height - 1
@@ -93,14 +98,14 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                 current_height = max_height
                 # query in batches while the current height is greater than the min height
                 while current_height > min_height:
-                    print(f"{current_height}")
-
                     # check if the next iteration will be less than the min height and set lower bound accordingly
                     if current_height - chain.step_size > min_height:
                         query_lower_bound = current_height - chain.step_size
                     else:
                         query_lower_bound = min_height
-                    print(f"querying range {current_height} - {query_lower_bound}")
+                    logger.info(
+                        f"backfill - querying range {current_height} - {query_lower_bound}"
+                    )
 
                     # query and process the blocks in the range
                     tasks: List[Coroutine] = [
@@ -109,9 +114,9 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                     ]
                     await run_and_upsert_tasks(tasks, pool)
 
-                    print("data upserted")
+                    logger.info("backfill - data upserted")
                     current_height = query_lower_bound
-    print("finish backfill task")
+    logger.info("backfill - finish backfill task")
 
 
 async def get_data_historical(
@@ -127,11 +132,11 @@ async def get_data_historical(
     Returns:
         Raw | None: Raw data object or None if the block data is None.
     """
-    print(f"pulling new data {height}")
     block_res_json = await chain.get_block(session, height=height)
-    print(f"block returned {height}")
+    logger = logging.getLogger("indexer")
+    logger.info(f"block returned {height=}")
     if block_res_json is not None:
         return await process_block(block_res_json, session, chain)
     else:
-        print("block data is None")
+        logger.info("block data is None")
         return None

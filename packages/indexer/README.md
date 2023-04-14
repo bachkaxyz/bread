@@ -85,6 +85,8 @@ Example: `https://api.jackalprotocol.com,https://api.jackalprotocol.com`
 
 `INDEXER_SCHEMA` (optional) - default schema to store data in. Defaults to: `public`
 
+`USE_LOG_FILE` (optional) - whether logs get written to stdout or a file named `logger.log`. Defaults to `true`
+
 Postgres Config from root environment variable:
 
 ```shell
