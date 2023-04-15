@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS $schema.blocks(
     time TIMESTAMP NOT NULL,
     block_hash TEXT NOT NULL,
     proposer_address TEXT NOT NULL,
-    
+
     PRIMARY KEY (chain_id, height),
     FOREIGN KEY (chain_id, height) REFERENCES $schema.raw(chain_id, height) ON DELETE CASCADE
 );
@@ -38,13 +38,13 @@ CREATE TABLE IF NOT EXISTS $schema.txs(
 );
 CREATE TABLE IF NOT EXISTS $schema.logs (
     txhash TEXT NOT NULL,
-    msg_index TEXT NOT NULL, -- This should be an int
+    msg_index TEXT NOT NULL,  -- This should be an int
     parsed JSONB,
     failed BOOLEAN NOT NULL DEFAULT FALSE,
     failed_msg TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    
+
     PRIMARY KEY (txhash, msg_index),
     FOREIGN KEY (txhash) REFERENCES $schema.txs(txhash) ON DELETE CASCADE
 );
