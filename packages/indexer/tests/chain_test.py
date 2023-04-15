@@ -3,7 +3,12 @@ import os
 from aiohttp import ClientSession
 import asyncio
 import pytest
-from indexer.chain import CosmosChain, get_chain_from_environment
+from indexer.chain import (
+    CosmosChain,
+    get_chain_from_environment,
+    query_chain_registry,
+    remove_bad_apis,
+)
 from unittest.mock import AsyncMock, MagicMock
 
 
@@ -154,8 +159,8 @@ async def test_chain_environment_time_between_blocks_not_int(mock_client):
     os.environ["TIME_BETWEEN_BLOCKS"] = "1"
 
 
-async def test_chain_environment_pass(mock_client: ClientSession):
-    exp_res = {
+async def test_chain_environment_pass(mock_client: ClientSession, mocker):
+    chain_reg = {
         "chain_name": "jackal",
         "chain_id": "jackal-1",
         "apis": {
@@ -170,6 +175,16 @@ async def test_chain_environment_pass(mock_client: ClientSession):
                 },
             ],
         },
+    }
+
+    mocker.patch("indexer.chain.query_chain_registry", return_value=chain_reg)
+
+    exp_res = {
+        "block": {
+            "header": {
+                "height": "1",
+            }
+        }
     }
 
     mock_client.get.return_value.__aenter__.return_value.status = 200
@@ -254,4 +269,50 @@ async def test_chain_environment_pass(mock_client: ClientSession):
             },
             current_api_index=0,
             time_between_blocks=1,
+        )
+
+
+async def test_query_chain_registry(mock_client):
+    chain_reg = {
+        "chain_name": "jackal",
+        "chain_id": "jackal-1",
+        "apis": {
+            "rest": [
+                {
+                    "address": "https://api.jackalprotocol.com",
+                    "provider": "Jackal Labs",
+                },
+                {
+                    "address": "https://jackal-api.lavenderfive.com:443",
+                    "provider": "Lavender.Five Nodes 🐝",
+                },
+            ],
+        },
+    }
+
+    mock_client.get.return_value.__aenter__.return_value.status = 200
+    mock_client.get.return_value.__aenter__.return_value.read.return_value = json.dumps(
+        chain_reg
+    )
+
+    assert await query_chain_registry(mock_client, "jackal") == chain_reg
+
+
+async def test_remove_bad_api_exception(mock_client):
+    invalid_json = {
+        "block": {
+            "height": "1",
+        }
+    }
+
+    mock_client.get.return_value.__aenter__.return_value.status = 200
+    mock_client.get.return_value.__aenter__.return_value.read.return_value = json.dumps(
+        invalid_json
+    )
+
+    with pytest.raises(BaseException):
+        await remove_bad_apis(
+            mock_client,
+            {"https://api.jackalprotocol.com": {"hit": 0, "miss": 0}},
+            "blocks/",
         )

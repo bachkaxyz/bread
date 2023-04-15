@@ -194,6 +194,13 @@ class CosmosChain:
             return int(lowest_height)
 
 
+async def query_chain_registry(session: ClientSession, chain_registry_name: str):
+    async with session.get(
+        url=f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_registry_name}/chain.json"
+    ) as raw:
+        return await get_json(raw)
+
+
 async def get_chain_registry_info(
     session: ClientSession, chain_registry_name: str
 ) -> Tuple[str, List[str]]:
@@ -206,14 +213,11 @@ async def get_chain_registry_info(
     Returns:
         Tuple[str, List[str]]: Chain_id, list of apis
     """
-    async with session.get(
-        url=f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_registry_name}/chain.json"
-    ) as raw_chain:
-        raw_chain = await get_json(raw_chain)
-        rest_apis = raw_chain["apis"]["rest"]
-        apis: List[str] = [api["address"] for api in rest_apis]
-        chain_id: str = raw_chain["chain_id"]
-        return chain_id, apis
+    raw_chain = await query_chain_registry(session, chain_registry_name)
+    rest_apis = raw_chain["apis"]["rest"]
+    apis: List[str] = [api["address"] for api in rest_apis]
+    chain_id: str = raw_chain["chain_id"]
+    return chain_id, apis
 
 
 async def get_chain_info(session: ClientSession) -> Tuple[str, Apis]:
@@ -262,26 +266,25 @@ async def remove_bad_apis(
     api_heights: List[Tuple[str, Api, int]] = []
     for i, (api, hit_miss) in enumerate(apis.items()):
         try:
-            res = await session.get(f"{api}{blocks_endpoint.format('latest')}")
-            j = await get_json(res)
-            api_heights.append((api, hit_miss, j["block"]["header"]["height"]))
+            async with session.get(f"{api}{blocks_endpoint.format('latest')}") as res:
+                j = await get_json(res)
+                api_heights.append((api, hit_miss, int(j["block"]["header"]["height"])))
         except Exception as e:
-            pass
+            logger = logging.getLogger("indexer")
+            logger.info(f"Error with {api}: {e}")
 
-    not_outliers = {}
+    max_height = max([height for _, _, height in api_heights])
+    difs = [
+        (api, hit_miss, (max_height - height)) for api, hit_miss, height in api_heights
+    ]
 
-    # we want to remove apis that are more than 3 standard deviations away from the mean
-    threshold = 3
-    heights = [int(height) for base, hit_miss, height in api_heights]
-    mean_1 = np.mean(heights)
-    std_1 = np.std(heights)
+    not_outliers = filter(lambda x: x[2] < 10, difs)
 
-    for base, hit_miss, height in api_heights:
-        height = int(height)
-        z_score = (height - mean_1) / std_1
-        if np.abs(z_score) < threshold:
-            not_outliers[base] = hit_miss
-    return not_outliers
+    logger = logging.getLogger("indexer")
+    logger.info(f"{not_outliers=}")
+
+    d = {api: hit_miss for api, hit_miss, _ in not_outliers}
+    return d
 
 
 async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
@@ -315,7 +318,7 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
         time_between = int(time_between)
         batch_size = int(batch_size)
         step_size = int(step_size)
-    except OSError as e:
+    except BaseException as e:
         raise EnvironmentError(
             "Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int"
         )
