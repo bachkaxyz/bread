@@ -1,0 +1,28 @@
+
+version: 2
+
+models:
+  - name: num-txs-per-day
+    description: "Number of transactions on each day"
+    columns:
+      - name: day
+        tests:
+          - unique
+          - not_null
+      - name: tx_count
+  - name: cum-txs-per-day
+    description: "Cumulative sum of the transactions on every day"
+    columns:
+      - name: day
+      - name: tx_count
+sources:
+  - name: indexer
+    schema: "{{env_var('INDEXER_SCHEMA', 'public')}}"
+    tables:
+      - name: raw_txs
+      - name: txs
+      - name: logs
+      - name: log_columns
+      - name: raw_blocks
+      - name: blocks
+

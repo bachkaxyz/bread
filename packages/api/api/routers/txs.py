@@ -10,17 +10,8 @@ router = APIRouter(
 async def get_cumulative_txs():
     return await database.fetch_all(
         """
-        with num_txs_per_day as (
-            select count(1), date_trunc('day', timestamp) as d
-            from txs
-            group by d
-            order by d
-        ) 
-
-        select
-        d as "day",
-        sum(count) over (order by d asc rows between unbounded preceding and current row) as "tx_count"
-        from num_txs_per_day
+        select *
+        from dbt.cum_txs_per_day
         """
     )
 
@@ -29,9 +20,7 @@ async def get_cumulative_txs():
 async def daily_txs():
     return await database.fetch_all(
         """
-        select date_trunc('day', timestamp) as "day", count(1) as "tx_count"
-        from txs
-        group by "day"
-        order by "day"
+        select *
+        from dbt.num_txs_per_day
         """
     )

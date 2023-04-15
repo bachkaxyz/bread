@@ -1,0 +1,11 @@
+services:
+  dbt:
+    container_name: dbt
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ./:/dbt-indexer
+    environment:
+      - DBT_PROFILES_DIR=./indexer
+    command: poetry run dbt test --project-dir ./indexer
