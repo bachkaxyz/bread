@@ -1,4 +1,3 @@
-
 version: 2
 
 models:
@@ -18,16 +17,3 @@ models:
           - unique
           - not_null
       - name: tx_count
-sources:
-  - name: indexer
-    schema: "{{env_var('INDEXER_SCHEMA', 'public')}}"
-    tables:
-      - name: raw
-        
-      - name: txs
-        description: Txs 
-        columns: 
-          - name: txhash
-      - name: logs
-      - name: log_columns
-      - name: blocks
