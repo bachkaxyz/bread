@@ -12,3 +12,16 @@ jobs:
               name: Check code formatting
               with:
                 options: "--check --verbose ."
+    SQLFormt:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+
+            - name: Set up Python 3.10
+              uses: actions/setup-python@v4
+              with:
+                python-version: "3.10"
+            - name: Install sqlfmt
+              run: pip install shandy-sqlfmt[jinjafmt]
+            - name: Run sqlfmt
+              run: sqlfmt --diff --check .
