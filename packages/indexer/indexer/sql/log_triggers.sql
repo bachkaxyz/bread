@@ -1,5 +1,7 @@
-CREATE OR REPLACE FUNCTION on_log_column_change() RETURNS TRIGGER AS
-$$
+create or replace function on_log_column_change()
+returns trigger
+as
+    $$
     DECLARE
         column_name TEXT;
         unparsed_columns JSONB;
@@ -34,14 +36,17 @@ $$
         RETURN NEW;
     END
 $$
-LANGUAGE plpgsql;
+language plpgsql
+;
 CREATE OR REPLACE TRIGGER log_column_change
 AFTER UPDATE
 ON $schema.log_columns
 FOR EACH ROW EXECUTE PROCEDURE on_log_column_change();
 
-CREATE OR REPLACE FUNCTION log_insert() RETURNS TRIGGER AS
-$$
+create or replace function log_insert()
+returns trigger
+as
+    $$
     DECLARE
         cur_log_columns cursor for 
             select event || '_' || attribute as column_name
@@ -55,7 +60,8 @@ $$
         RETURN NEW;
     END
 $$
-LANGUAGE plpgsql;
+language plpgsql
+;
 CREATE OR REPLACE TRIGGER log_insert
 AFTER INSERT
 on $schema.logs
