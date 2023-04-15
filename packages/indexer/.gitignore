@@ -1,3 +1,4 @@
 *.txt
 coverage.xml
 pytest.xml
+indexer.log
