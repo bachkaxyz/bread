@@ -1,16 +1,11 @@
-import os
-
 from dagster import (
     Definitions,
-    load_assets_from_modules,
-    load_assets_from_package_module,
 )
-from dagster_dbt import dbt_cli_resource
 
-from jobs.assets import core_assets, dbt_assets
-from jobs.resources import DBT_PROFILES, DBT_PROJECT_PATH, RESOURCES
+from jobs.assets import ALL_ASSETS
+from jobs.resources import RESOURCES
+from jobs.jobs import ALL_JOBS, ALL_SCHEDULES
 
-all_assets = [*core_assets, *dbt_assets]
-
-
-defs = Definitions(assets=all_assets, resources=RESOURCES)
+defs = Definitions(
+    assets=ALL_ASSETS, resources=RESOURCES, jobs=ALL_JOBS, schedules=ALL_SCHEDULES
+)
