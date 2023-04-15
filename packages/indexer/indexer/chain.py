@@ -3,7 +3,6 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 from aiohttp import ClientResponse, ClientSession
-import numpy as np
 from indexer.exceptions import APIResponseError
 import logging
 
