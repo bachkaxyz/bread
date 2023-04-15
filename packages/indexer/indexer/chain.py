@@ -10,38 +10,43 @@ ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"
 
 
+Api = Dict[str, int]
+Apis = Dict[str, Api]
+
+
+async def is_valid_response(resp: ClientResponse) -> bool:
+    """Check if the response is in the correct format
+
+    Args:
+        resp (ClientResponse): raw response from the api call to check
+
+    Returns:
+        bool: True if the response is valid, False otherwise
+    """
+    # could we return specific error messages here to save to db?
+    try:
+        return (
+            list((await get_json(resp)).keys()) != ["code", "message", "details"]
+            and resp.status == 200
+        )
+    except Exception as e:
+        return False
+
+
+async def get_json(resp: ClientResponse) -> dict:
+    return json.loads(await resp.read())
+
+
 @dataclass
 class CosmosChain:
     chain_id: str
     blocks_endpoint: str
     txs_endpoint: str
-    apis: Dict[str, Dict[str, int]]
+    apis: Apis
     current_api_index: int = 0
     time_between_blocks: int = 1
     batch_size: int = 20
     step_size: int = 10
-
-    async def is_valid_response(self, resp: ClientResponse) -> bool:
-        """Check if the response is in the correct format
-
-        Args:
-            resp (ClientResponse): raw response from the api call to check
-
-        Returns:
-            bool: True if the response is valid, False otherwise
-        """
-        # could we return specific error messages here to save to db?
-        try:
-            return (
-                list((await self.get_json(resp)).keys())
-                != ["code", "message", "details"]
-                and resp.status == 200
-            )
-        except Exception as e:
-            return False
-
-    async def get_json(self, resp: ClientResponse) -> dict:
-        return json.loads(await resp.read())
 
     def get_next_api(self) -> str:
         """Get the next api to hit"""
@@ -99,9 +104,9 @@ class CosmosChain:
             cur_api = self.get_next_api()
             try:
                 async with session.get(f"{cur_api}{endpoint}") as resp:
-                    if await self.is_valid_response(resp):
+                    if await is_valid_response(resp):
                         self.add_api_hit(cur_api)
-                        return cur_api, await self.get_json(resp)
+                        return cur_api, await get_json(resp)
                     else:
                         raise APIResponseError("API Response Not Valid")
             except BaseException as e:
@@ -188,6 +193,13 @@ class CosmosChain:
             return int(lowest_height)
 
 
+async def query_chain_registry(session: ClientSession, chain_registry_name: str):
+    async with session.get(
+        url=f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_registry_name}/chain.json"
+    ) as raw:
+        return await get_json(raw)
+
+
 async def get_chain_registry_info(
     session: ClientSession, chain_registry_name: str
 ) -> Tuple[str, List[str]]:
@@ -200,17 +212,14 @@ async def get_chain_registry_info(
     Returns:
         Tuple[str, List[str]]: Chain_id, list of apis
     """
-    async with session.get(
-        url=f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_registry_name}/chain.json"
-    ) as raw_chain:
-        raw_chain = json.loads(await raw_chain.read())
-        rest_apis = raw_chain["apis"]["rest"]
-        apis: List[str] = [api["address"] for api in rest_apis]
-        chain_id: str = raw_chain["chain_id"]
-        return chain_id, apis
+    raw_chain = await query_chain_registry(session, chain_registry_name)
+    rest_apis = raw_chain["apis"]["rest"]
+    apis: List[str] = [api["address"] for api in rest_apis]
+    chain_id: str = raw_chain["chain_id"]
+    return chain_id, apis
 
 
-async def get_chain_info(session: ClientSession) -> Tuple[str, Dict[str, dict]]:
+async def get_chain_info(session: ClientSession) -> Tuple[str, Apis]:
     """Get chain info from environment variables
 
     Args:
@@ -220,7 +229,7 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, Dict[str, dict]]:
         EnvironmentError: If environment variables are not set
 
     Returns:
-        Tuple[str, Dict[str, dict]]: _description_
+        Tuple[str, APIS]: Chain_id, Apis
     """
     chain_registry_name = os.getenv("CHAIN_REGISTRY_NAME", None)
     load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", "True").upper() == "TRUE"
@@ -250,6 +259,33 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, Dict[str, dict]]:
     return chain_id, formatted_apis
 
 
+async def remove_bad_apis(
+    session: ClientSession, apis: Apis, blocks_endpoint: str
+) -> Apis:
+    api_heights: List[Tuple[str, Api, int]] = []
+    for i, (api, hit_miss) in enumerate(apis.items()):
+        try:
+            async with session.get(f"{api}{blocks_endpoint.format('latest')}") as res:
+                j = await get_json(res)
+                api_heights.append((api, hit_miss, int(j["block"]["header"]["height"])))
+        except Exception as e:
+            logger = logging.getLogger("indexer")
+            logger.info(f"Error with {api}: {e}")
+
+    max_height = max([height for _, _, height in api_heights])
+    difs = [
+        (api, hit_miss, (max_height - height)) for api, hit_miss, height in api_heights
+    ]
+
+    not_outliers = filter(lambda x: x[2] < 10, difs)
+
+    logger = logging.getLogger("indexer")
+    logger.info(f"{not_outliers=}")
+
+    d = {api: hit_miss for api, hit_miss, _ in not_outliers}
+    return d
+
+
 async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
     """Creates a CosmosChain based on environment config
 
@@ -268,22 +304,27 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
     time_between = os.getenv("TIME_BETWEEN_BLOCKS", "1")
     batch_size = os.getenv("BATCH_SIZE", "20")
     step_size = os.getenv("STEP_SIZE", "10")
+    blocks_endpoint = os.getenv(
+        "BLOCKS_ENDPOINT", "/cosmos/base/tendermint/v1beta1/blocks/{}"
+    )
+
+    txs_endpoint = os.getenv(
+        "TXS_ENDPOINT", "/cosmos/tx/v1beta1/txs?events=tx.height={}"
+    )
+    apis = await remove_bad_apis(session, apis, blocks_endpoint)
+
     try:
         time_between = int(time_between)
         batch_size = int(batch_size)
         step_size = int(step_size)
-    except OSError as e:
+    except BaseException as e:
         raise EnvironmentError(
             "Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int"
         )
     chain = CosmosChain(
         chain_id=chain_id,
-        blocks_endpoint=os.getenv(
-            "BLOCKS_ENDPOINT", "/cosmos/base/tendermint/v1beta1/blocks/{}"
-        ),
-        txs_endpoint=os.getenv(
-            "TXS_ENDPOINT", "/cosmos/tx/v1beta1/txs?events=tx.height={}"
-        ),
+        blocks_endpoint=blocks_endpoint,
+        txs_endpoint=txs_endpoint,
         apis=apis,
         time_between_blocks=time_between,
         batch_size=batch_size,
