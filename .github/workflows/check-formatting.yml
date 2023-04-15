@@ -3,7 +3,7 @@ name: Correct Code Formatting
 on: [push]
 
 jobs:
-    BlackCodeFormatCheck:
+    black_python_formatting:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
@@ -12,7 +12,7 @@ jobs:
               name: Check code formatting
               with:
                 options: "--check --verbose ."
-    SQLFormt:
+    SQL_formatting:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v3
