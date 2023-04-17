@@ -8,7 +8,7 @@ authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
 python = "3.10.*"
 fastapi = "^0.89.1"
 uvicorn = {version = "^0.20.0", extras = ["standard"]}
-python-dotenv = "^1.0.0"
+python-dotenv = "^1.0"
 databases = {version = "^0.7.0", extras = ["asyncpg"]}
 gunicorn = "^20.1.0"
 
