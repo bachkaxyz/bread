@@ -35,7 +35,7 @@ jobs:
 
     - name: Build and push Docker image
       env:
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:latest'
       run: |
         docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile --target api-prod
         docker push $IMAGE_TAG
@@ -43,7 +43,7 @@ jobs:
     - name: Update Cloud Run service
       env:
         SERVICE_NAME: sn-mono-${{ env.CI_ACTION_REF_NAME }}-api
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:latest'
       run: |
         gcloud run services update $SERVICE_NAME \
           --platform managed \
@@ -79,7 +79,7 @@ jobs:
 
     - name: Build and push Docker image
       env:
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest'
       run: |
         docker build -t $IMAGE_TAG ./packages/dashboard -f ./packages/dashboard/Dockerfile --target dashboard-prod
         docker push $IMAGE_TAG
@@ -87,7 +87,7 @@ jobs:
     - name: Update Cloud Run service
       env:
         SERVICE_NAME: sn-mono-${{ env.CI_ACTION_REF_NAME }}-dashboard
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest'
       run: |
         gcloud run services update $SERVICE_NAME \
           --platform managed \
@@ -123,7 +123,7 @@ jobs:
     
     - name: Build and push Docker image
       env:
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-indexer:${{ github.sha }}'
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-indexer:latest'
       run: |
         docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target indexer-prod
         docker push $IMAGE_TAG
