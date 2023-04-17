@@ -125,6 +125,6 @@ jobs:
       env:
         IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-indexer:${{ github.sha }}'
       run: |
-        docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target indexeer-prod
+        docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target indexer-prod
         docker push $IMAGE_TAG
 
