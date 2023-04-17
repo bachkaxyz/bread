@@ -1,12 +1,10 @@
 version: '3'
 services:
   indexer:
-    image: gcr.io/secretnetwork/sn-mono/{GIT_BRANCH}/{GIT_BRANCH}-indexer:latest
-    env_file:
-      - .env
-      - ./../../.env
-    volumes:
-      - ./:/indexer
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: indexer-prod
     container_name: indexer
     command: python indexer/main.py
     working_dir: /indexer
