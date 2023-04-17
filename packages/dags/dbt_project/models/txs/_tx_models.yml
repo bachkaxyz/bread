@@ -1,0 +1,19 @@
+version: 2
+
+models:
+  - name: num-txs-per-day
+    description: "Number of transactions on each day"
+    columns:
+      - name: day
+        tests:
+          - unique
+          - not_null
+      - name: tx_count
+  - name: cum-txs-per-day
+    description: "Cumulative Number of Transactions on each day"
+    columns:
+      - name: day
+        tests:
+          - unique
+          - not_null
+      - name: tx_count

@@ -128,3 +128,37 @@ jobs:
         docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target indexer-prod
         docker push $IMAGE_TAG
 
+  dagster:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: GitHub Environment Variables Action
+      uses: FranzDiebold/github-env-vars-action@v2.7.0
+
+    - id: 'auth'
+      name: 'Authenticate to Google Cloud'
+      uses: 'google-github-actions/auth@v1'
+      with:
+        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+        export_environment_variables: true
+
+    - name: Configure Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1.1.0
+
+    - name: Authorize Docker push
+      run: gcloud auth configure-docker
+      
+    - name: debug
+      run: echo env
+
+    
+    - name: Build and push Docker image
+      env:
+        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dagster:latest'
+      run: |
+        docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target dagster-base
+        docker push $IMAGE_TAG
+

@@ -1,18 +1,24 @@
 [tool.poetry]
-name = "api"
+name = "dags"
 version = "0.1.0"
 description = ""
 authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
+readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "3.10.*"
-fastapi = "^0.89.1"
-uvicorn = {version = "^0.20.0", extras = ["standard"]}
-python-dotenv = "^1.0"
-databases = {version = "^0.7.0", extras = ["asyncpg"]}
-gunicorn = "^20.1.0"
+dagster = "^1.2.7"
+dagit = "^1.2.7"
+dbt-core = "^1.4.5"
+dbt-postgres = "^1.4.5"
+dagster-dbt = "^0.18.7"
+pandas = "^2.0.0"
+pycoingecko = "^3.1.0"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.dagster]
+module_name = "dags"
