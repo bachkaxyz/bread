@@ -1,6 +1,6 @@
 from dagster import ScheduleDefinition, define_asset_job, AssetSelection
 
-from dag.assets import DBT_ASSETS, DBT_KEY
+from dags.assets import DBT_ASSETS, DBT_KEY
 
 dbt_job = define_asset_job("dbt_job", selection=AssetSelection.assets(*DBT_ASSETS))
 

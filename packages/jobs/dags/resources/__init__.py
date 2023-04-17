@@ -1,7 +1,7 @@
 import os
 from dagster_dbt import dbt_cli_resource
 from dagster import file_relative_path
-from dag.resources.postgres_io_manager import DbIOManager
+from dags.resources.postgres_io_manager import DbIOManager
 from dotenv import load_dotenv
 
 load_dotenv()
