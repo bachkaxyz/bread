@@ -4,6 +4,7 @@ echo ENVIRONMENT: $ENVIRONMENT;
 echo BRANCH NAME: $GIT_BRANCH;
 
 if [ $ENVIRONMENT == "production" ]; then
+    echo "production mode";
     cd ./packages/indexer;
     docker compose -f docker-compose.yaml down;
     docker compose -f docker-compose.yaml up -d;
