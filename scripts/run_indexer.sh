@@ -13,7 +13,7 @@ if [ "$ENVIRONMENT" == ""]; then
 elif [ "$ENVIRONMENT" == "production" ]; then
     echo "production mode";
     cd ./packages/indexer;
-    export GIT_BRANCH=$GIT_BRANCH;
+    sudo export GIT_BRANCH=$GIT_BRANCH;
     sudo docker compose -f docker-compose.yaml down;
     sudo docker compose -f docker-compose.yaml up -d;
     
