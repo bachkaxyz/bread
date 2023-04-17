@@ -8,7 +8,6 @@ if [ $ENVIRONMENT == "production" ]; then
     envsubst < ./docker-compose.yaml > ./docker-compose.yaml;
     docker compose -f docker-compose.yaml down;
     docker compose -f docker-compose.yaml up -d;
-    git checkout -- ./docker-compose.yaml;
 elif [ $ENVIRONMENT == "development" ]; then
     echo "development mode";
     cd ./packages/indexer;
