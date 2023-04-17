@@ -2,7 +2,7 @@ FROM python:3.10 AS dagster-base
 
 RUN pip install poetry==1.4.1
 
-WORKDIR /jobs
+WORKDIR /dags
 
 COPY poetry.lock pyproject.toml ./
 

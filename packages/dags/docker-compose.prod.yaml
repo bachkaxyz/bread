@@ -1,10 +1,7 @@
 version: '3'
 services:
   dagit:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: dagster-base
+    image: gcr.io/secretnetwork/sn-mono/${GIT_BRANCH}/${GIT_BRANCH}-dagster
     entrypoint:
       - poetry
       - run
@@ -26,10 +23,7 @@ services:
     volumes:
       - ./:/dags
   daemon:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: dagster-base
+    image: gcr.io/secretnetwork/sn-mono/${GIT_BRANCH}/${GIT_BRANCH}-dagster
     entrypoint:
       - poetry
       - run
@@ -37,6 +31,8 @@ services:
       - run
     container_name: daemon
     restart: on-failure
+    volumes:
+      - ./:/dags
     env_file:
       - .env
       - ./../../.env
