@@ -5,7 +5,9 @@ services:
       dockerfile: Dockerfile
     container_name: dagster
     volumes:
-      - .:/jobs
+      - .:/dags
+      - .:/dagster_home
+      - .:/dbt_project
     ports:
       - "3000:3000"
     env_file:

@@ -13,6 +13,7 @@ dbt-core = "^1.4.5"
 dbt-postgres = "^1.4.5"
 dagster-dbt = "^0.18.7"
 pandas = "^2.0.0"
+pycoingecko = "^3.1.0"
 
 
 [build-system]
@@ -20,4 +21,4 @@ requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.dagster]
-module_name = "jobs"
+module_name = "dags"

@@ -2,8 +2,8 @@ from dagster import (
     load_assets_from_package_module,
 )
 from dagster_dbt import load_assets_from_dbt_project
-from jobs.assets import core
-from jobs.resources import DBT_PROFILES, DBT_PROJECT_PATH
+from dag.assets import core
+from dag.resources import DBT_PROFILES, DBT_PROJECT_PATH
 
 CORE_KEY = "core"
 DBT_KEY = "dbt"
