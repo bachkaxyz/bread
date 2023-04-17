@@ -1,0 +1,11 @@
+version: 2
+models:
+  - name: gas-used-per-day
+    description: "Gas Used Per Day"
+    columns:
+      - name: day
+        tests:
+          - unique
+          - not_null
+      - name: gas_used
+        description: "Amount of Gas Used everyday"

@@ -1,0 +1,42 @@
+version: '3'
+services:
+  dagit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dagster-base
+    entrypoint:
+      - poetry
+      - run
+      - dagit
+      - -h
+      - "0.0.0.0"
+      - -p
+      - "3000"
+      - -w
+      - workspace.yaml
+    container_name: dagit
+    expose:
+      - "3000"
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+      - ./../../.env
+    volumes:
+      - ./:/dags
+  daemon:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dagster-base
+    entrypoint:
+      - poetry
+      - run
+      - dagster-daemon
+      - run
+    container_name: daemon
+    restart: on-failure
+    env_file:
+      - .env
+      - ./../../.env
