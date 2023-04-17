@@ -1,3 +1,4 @@
 *.txt
-*.csv
 coverage.xml
+pytest.xml
+indexer.log

@@ -1,165 +1,180 @@
-import asyncio
-import json
 import os
-from typing import Dict, List, Tuple
-import aiohttp
-
-import asyncpg
+from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
-from indexer.parser import Log
+from indexer.exceptions import ChainDataIsNoneError
+from indexer.parser import Raw
+import logging
 
 
-async def drop_tables(pool: asyncpg.pool):
-    await pool.execute(
+async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
+    """
+    Generator that yields missing blocks from the database
+
+    limit of 100 is to prevent the generator from yielding too many results to keep live data more up to date
+    """
+    async for record in conn.cursor(
         """
-        DROP TABLE IF EXISTS raw_blocks CASCADE;
-        DROP TABLE IF EXISTS raw_txs CASCADE;
-        DROP TABLE IF EXISTS blocks CASCADE;
-        DROP TABLE IF EXISTS txs CASCADE;
-        DROP TABLE IF EXISTS logs CASCADE;
-        DROP TABLE IF EXISTS log_columns CASCADE;
-        DROP TABLE IF EXISTS messages CASCADE;
+        select height, difference_per_block from (
+            select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
+            from raw
+            where chain_id = $1
+        ) as dif
+        where difference_per_block <> 1
+        order by height desc
+        limit 100
+        """,
+        chain.chain_id,
+    ):
+        yield record
+
+
+async def wrong_tx_count_cursor(conn: Connection, chain: CosmosChain):
+    """
+    Generator that yields blocks with wrong tx counts from the database
+    """
+    async for record in conn.cursor(
         """
+        select height, block_tx_count, chain_id
+        from raw
+        where tx_tx_count <> block_tx_count and chain_id = $1
+        """,
+        chain.chain_id,
+    ):
+        yield record
+
+
+async def drop_tables(conn: Connection, schema: str):
+    await conn.execute(f"DROP SCHEMA IF EXISTS {schema} CASCADE")
+    await conn.execute(f"CREATE SCHEMA {schema}")
+
+
+async def create_tables(conn: Connection, schema: str):
+    # we use the path of your current directory to get the absolute path of the sql files depending on where the script is run from
+    cur_dir = os.path.dirname(__file__)
+    file_path = os.path.join(cur_dir, "sql/create_tables.sql")
+    with open(file_path, "r") as f:
+        # our schema in .sql files is defined as $schema so we replace it with the actual schema name
+        await conn.execute(f.read().replace("$schema", schema))
+
+    file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
+    with open(file_path, "r") as f:
+        await conn.execute(f.read().replace("$schema", schema))
+
+
+async def upsert_data(pool: Pool, raw: Raw) -> bool:
+    """Upsert a blocks data into the database
+
+    Args:
+        pool (Pool): The database connection pool
+        raw (Raw): The raw data to upsert
+
+    Returns:
+        bool: True if the data was upserted, False if the data was not upserted
+    """
+
+    logger = logging.getLogger("indexer")
+    # we check if the data is valid before upserting it
+    if raw.height is not None and raw.chain_id is not None:
+        async with pool.acquire() as conn:
+            # we do all the upserts in a transaction so that if one fails, all of them fail
+            async with conn.transaction():
+                await insert_raw(conn, raw)
+
+                # we are checking if the block is not None because we might only have the tx data and not the block data
+                if raw.block is not None:
+                    logger.info(f"raw block height {raw.block.height}")
+                    await insert_block(conn, raw)
+
+                await insert_many_txs(conn, raw)
+
+                await insert_many_log_columns(conn, raw)
+
+                await insert_many_logs(conn, raw)
+
+        logger.info(f"{raw.height=} inserted")
+        return True
+
+    else:
+        logger.info(f"{raw.height} {raw.chain_id} {raw.block}")
+        return False
+
+
+async def insert_raw(conn: Connection, raw: Raw):
+    # the on conflict clause is used to update the tx_responses and tx_tx_count columns if the raw data already exists but the tx data is new
+    await conn.execute(
+        f"""
+                INSERT INTO raw(chain_id, height, block, block_tx_count, tx_responses, tx_tx_count)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT ON CONSTRAINT raw_pkey
+                DO UPDATE SET tx_responses = EXCLUDED.tx_responses, tx_tx_count = EXCLUDED.tx_tx_count;
+                """,
+        *raw.get_raw_db_params(),
     )
 
 
-async def get_table_cols(pool: asyncpg.pool, table_name):
-    async with pool.acquire() as conn:
-        cols = await conn.fetch(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'public' AND table_name = $1;
-            """,
-            table_name,
-        )
-        return [col["column_name"] for col in cols]
-
-
-async def create_tables(pool: asyncpg.pool):
-    cur_dir = os.path.dirname(__file__)
-    async with pool.acquire() as conn:
-
-        file_path = os.path.join(cur_dir, "sql/create_tables.sql")
-        with open(file_path, "r") as f:
-            await conn.execute(f.read())
-
-        # create the parse_raw function on insert trigger of raw
-        file_path = os.path.join(cur_dir, "sql/parse_raw.sql")
-        with open(file_path, "r") as f:
-            await conn.execute(f.read())
-
-        file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
-        with open(file_path, "r") as f:
-            await conn.execute(f.read())
-
-
-async def upsert_raw_blocks(pool: asyncpg.pool, block: dict):
-    async with pool.acquire() as conn:
-        chain_id, height = block["block"]["header"]["chain_id"], int(
-            block["block"]["header"]["height"]
-        )
+async def insert_block(conn: Connection, raw: Raw):
+    if raw.block:
         await conn.execute(
             """
-            INSERT INTO raw_blocks (chain_id, height, block)
-            VALUES ($1, $2, $3)
-            ON CONFLICT DO NOTHING
-            """,
-            chain_id,
-            height,
-            json.dumps(block),
+                    INSERT INTO blocks(chain_id, height, time, block_hash, proposer_address)
+                    VALUES ($1, $2, $3, $4, $5);
+                    """,
+            *raw.block.get_db_params(),
         )
+    else:
+        raise ChainDataIsNoneError("Block does not exist")
 
 
-async def upsert_raw_txs(pool: asyncpg.pool, txs: Dict[str, List[dict]], chain_id: str):
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for height, tx in txs.items():
-                await conn.execute(
-                    """
-                    INSERT INTO raw_txs (chain_id, height, txs)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    chain_id,
-                    height,
-                    json.dumps(tx) if len(tx) > 0 else None,
+async def insert_many_txs(conn: Connection, raw: Raw):
+    await conn.executemany(
+        """
+                INSERT INTO txs(txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
+                VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
                 )
+                """,
+        raw.get_txs_db_params(),
+    )
 
 
-async def add_current_log_columns(pool: asyncpg.pool, new_cols: List[tuple[str, str]]):
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for i, row in enumerate(new_cols):
-                await conn.execute(
-                    f"""
-                    INSERT INTO log_columns (event, attribute)
-                    VALUES ($1, $2)
-                    ON CONFLICT DO NOTHING
-                    """,
-                    row[0],
-                    row[1],
+async def insert_many_log_columns(conn: Connection, raw: Raw):
+    await conn.executemany(
+        f"""
+                INSERT INTO log_columns (event, attribute)
+                VALUES ($1, $2)
+                ON CONFLICT DO NOTHING
+                """,
+        raw.get_log_columns_db_params(),
+    )
+
+
+async def insert_many_logs(conn: Connection, raw: Raw):
+    await conn.executemany(
+        f"""
+                INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
+                VALUES (
+                    $1, $2, $3, $4, $5
                 )
+                """,
+        raw.get_logs_db_params(),
+    )
 
 
-async def add_logs(pool: asyncpg.pool, logs: List[Log]):
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for log in logs:
-                await conn.execute(
-                    """
-                    INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
-                    VALUES (
-                        $1, $2, $3, $4, $5
-                    )
-                    """,
-                    log.txhash,
-                    str(log.msg_index),
-                    log.dump(),
-                    log.failed,
-                    str(log.failed_msg) if log.failed_msg else None,
-                )
-
-
-async def get_missing_from_raw(pool: asyncpg.pool, chain: CosmosChain, table_name: str):
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            f"""
-                select height, difference_per_block from (
-                    select height, COALESCE(height - LAG(height) over (order by height), -1) as difference_per_block, chain_id
-                    from {table_name}
-                    where chain_id = $1
-                ) as dif
-                where difference_per_block <> 1
-            """,
-            chain.chain_id,
-        )
-
-    # the above query returns the difference between the two blocks that exists
-
-    # so if we have height=7285179 and height=7285186 then the difference is 7
-    # but we really are missing the blocks between 7285179 and 7285186
-
-    # so we add 1 to the bottom and subtract 1 from the top to get the range of blocks we need to query
-
-    # this query returns the difference between the current block and the previous block, if there is no previous block it returns -1
-    # if dif == -1 and  if min_block_height == height and remove that row, otherwise return that number and min_block_height
-    updated_rows = []
-    for height, dif in rows:
-        if dif != -1:
-            updated_rows.append(((height - dif) + 1, height - 1))
-        else:
-            if height == chain.min_block_height:
-                continue
-            else:
-                updated_rows.append((chain.min_block_height, height - 1))
-
-    return updated_rows
-
-
-async def get_missing_txs(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
-    return await get_missing_from_raw(pool, chain, "raw_txs")
-
-
-async def get_missing_blocks(pool, chain: CosmosChain) -> List[Tuple[int, int]]:
-    return await get_missing_from_raw(pool, chain, "raw_blocks")
+async def get_max_height(conn: Connection, chain: CosmosChain) -> int:
+    """Get the max height of the chain from the database"""
+    res = await conn.fetchval(
+        """
+        select max(height)
+        from raw
+        where chain_id = $1
+        """,
+        chain.chain_id,
+        column=0,
+    )
+    logger = logging.getLogger("indexer")
+    logger.info(res)
+    if res:
+        return res
+    else:
+        # if max height doesn't exist
+        return 0
