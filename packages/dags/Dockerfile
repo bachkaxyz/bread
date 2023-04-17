@@ -16,4 +16,7 @@ RUN pip wheel --use-pep517 "pendulum (==2.1.2)"
 
 RUN poetry install --with dev -vv
 
-COPY . ./
+COPY ./workspace.yaml ./workspace.yaml
+COPY ./dagster_home/dagster.yaml ./dagster_home/dagster.yaml
+COPY ./dbt_project ./dbt_project
+COPY ./dags ./dags
