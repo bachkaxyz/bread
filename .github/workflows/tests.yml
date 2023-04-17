@@ -2,13 +2,12 @@ name: Indexer Tests
 
 on:
   push:
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
 
 jobs:
-  test:
+  indexer:
 
       runs-on: ubuntu-latest
       steps:
@@ -16,4 +15,4 @@ jobs:
             
           - name: Docker Compose Run Tests
             working-directory: packages/indexer
-            run: docker compose -f docker-compose.yaml -f docker-compose.tests.yaml run indexer
+            run: docker compose -f docker-compose.tests.yaml run indexer-test

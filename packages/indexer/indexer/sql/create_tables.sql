@@ -1,38 +1,29 @@
 CREATE SCHEMA IF NOT EXISTS $schema;
 
-CREATE TABLE IF NOT EXISTS $schema.raw_blocks (
+CREATE TABLE IF NOT EXISTS $schema.raw (
     chain_id TEXT NOT NULL,
     height BIGINT NOT NULL,
     block JSONB,
-    parsed_at TIMESTAMP DEFAULT NULL,
-    
+    block_tx_count BIGINT NOT NULL,
+    tx_responses JSONB,
+    tx_tx_count BIGINT NOT NULL, 
+    created_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (chain_id, height)
 );
-CREATE TABLE IF NOT EXISTS $schema.blocks (
+CREATE TABLE IF NOT EXISTS $schema.blocks(
     height BIGINT NOT NULL,
     chain_id TEXT NOT NULL,
-    time TIMESTAMP NOT NULL DEFAULT NOW(),
+    time TIMESTAMP NOT NULL,
     block_hash TEXT NOT NULL,
     proposer_address TEXT NOT NULL,
-    
-    PRIMARY KEY (chain_id, height),
-    FOREIGN KEY (chain_id, height) REFERENCES $schema.raw_blocks(chain_id, height) ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS $schema.raw_txs (
-    chain_id TEXT NOT NULL,
-    height BIGINT NOT NULL,
-    txs JSONB,
-    parsed_at TIMESTAMP DEFAULT NULL,
 
-    PRIMARY KEY (chain_id, height)
+    PRIMARY KEY (chain_id, height),
+    FOREIGN KEY (chain_id, height) REFERENCES $schema.raw(chain_id, height) ON DELETE CASCADE
 );
-CREATE TABLE IF NOT EXISTS $schema.txs (
+CREATE TABLE IF NOT EXISTS $schema.txs(
     txhash TEXT NOT NULL PRIMARY KEY,
     chain_id TEXT NOT NULL, 
     height BIGINT NOT NULL,
-    tx JSONB,
-    tx_response JSONB,
-    tx_response_tx_type TEXT,
     code TEXT,
     data TEXT,
     info TEXT,
@@ -43,19 +34,17 @@ CREATE TABLE IF NOT EXISTS $schema.txs (
     gas_wanted BIGINT,
     codespace TEXT,
     timestamp TIMESTAMP,
-    logs_parsed_at TIMESTAMP DEFAULT NULL,    
-    
-    FOREIGN KEY (chain_id, height) REFERENCES $schema.raw_txs(chain_id, height) ON DELETE CASCADE
+    FOREIGN KEY (chain_id, height) REFERENCES $schema.raw(chain_id, height) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS $schema.logs (
     txhash TEXT NOT NULL,
-    msg_index TEXT NOT NULL, -- This should be an int
+    msg_index TEXT NOT NULL,  -- This should be an int
     parsed JSONB,
     failed BOOLEAN NOT NULL DEFAULT FALSE,
     failed_msg TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    
+
     PRIMARY KEY (txhash, msg_index),
     FOREIGN KEY (txhash) REFERENCES $schema.txs(txhash) ON DELETE CASCADE
 );
