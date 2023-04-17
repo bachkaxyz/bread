@@ -9,7 +9,7 @@ CORE_KEY = "core"
 DBT_KEY = "dbt"
 
 CORE_ASSETS = load_assets_from_package_module(
-    package_module=core, group_name=CORE_KEY, key_prefix=[CORE_KEY]
+    package_module=core, key_prefix=[CORE_KEY]
 )
 
 DBT_ASSETS = load_assets_from_dbt_project(
