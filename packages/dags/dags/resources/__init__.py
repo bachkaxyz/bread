@@ -3,6 +3,7 @@ from dagster_dbt import dbt_cli_resource
 from dagster import file_relative_path
 from dags.resources.postgres_io_manager import DbIOManager
 from dotenv import load_dotenv
+from urllib.parse import quote_plus
 
 load_dotenv()
 
@@ -22,7 +23,7 @@ dbt_resource = dbt_cli_resource.configured(
 POSTGRES_HOST = os.getenv("POSTGRES_HOST")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT")
 POSTGRES_USER = os.getenv("POSTGRES_USER")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD")
+POSTGRES_PASSWORD = quote_plus(os.getenv("POSTGRES_PASSWORD", ""))
 POSTGRES_DB = os.getenv("POSTGRES_DB")
 
 JOB_SCHEMA = os.getenv("JOB_SCHEMA", "public")
