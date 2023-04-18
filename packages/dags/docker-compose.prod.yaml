@@ -9,7 +9,7 @@ services:
       - -h
       - "0.0.0.0"
       - -p
-      - "3000"
+      - "80"
       - -w
       - workspace.yaml
     container_name: dagit
