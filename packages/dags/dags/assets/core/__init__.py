@@ -9,7 +9,7 @@ from sqlalchemy import create_engine
 def create_coin_gecko_id_table(context):
     postgres = context.resources.postgres
     conn = postgres._get_conn()
-    postgres.execute(
+    conn.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {context.resources.postgres._schema}.coin_gecko_ids (
             id TEXT PRIMARY KEY
