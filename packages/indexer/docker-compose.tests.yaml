@@ -8,6 +8,7 @@ x-common-variables:
   - POSTGRES_HOST=test_postgres
   - INDEXER_SCHEMA=tests
   - BUCKET_NAME=sn-mono-indexer-tests
+  - GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS
 services:
   indexer-test:
     image: indexer-dev
