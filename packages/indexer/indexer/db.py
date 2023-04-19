@@ -118,7 +118,7 @@ async def insert_raw(conn: Connection, raw: Raw):
 
     BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
     storage_client = storage.Client()
-    bucket = storage_client.get_bucket("sn-mono-indexer-dev")  # your bucket name
+    bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
     height_blob = bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json")
     height_blob.upload_from_string(json.dumps(raw.raw_block))
 
