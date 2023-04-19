@@ -23,7 +23,8 @@ jobs:
           - name: "debug"
             run: |
               env
-              echo ${{ secrets.GCP_CREDENTIALS }}}
+          - name: "debug 2"
+            run: |
               echo ${{ secrets.GCP_PROJECT_ID }}
               echo ${{ secrets.GCP_SERVICE_ACCOUNT_NAME }}
 
