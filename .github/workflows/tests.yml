@@ -19,6 +19,11 @@ jobs:
             with:
               credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
               export_environment_variables: true
+          
+
+          - name: debug
+            run: echo $GOOGLE_APPLICATION_CREDENTIALS
+
 
           - name: Docker Compose Run Tests
             working-directory: packages/indexer
