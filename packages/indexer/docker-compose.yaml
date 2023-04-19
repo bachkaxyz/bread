@@ -8,7 +8,6 @@ services:
     env_file:
       - .env
       - ./../../.env
-    environment:
     volumes:
       - ./:/indexer
     container_name: indexer
