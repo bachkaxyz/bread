@@ -5,11 +5,6 @@ services:
       context: .
       dockerfile: Dockerfile
     image: indexer-dev
-    env_file:
-      - .env
-      - ./../../.env
-    volumes:
-      - ./:/indexer
 networks:
   default:
     name: sn-mono-network
