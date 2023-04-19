@@ -23,7 +23,7 @@ jobs:
           - name: "Move Google Cloud Credentials"
             run: |
               mkdir -p ./.conifg
-              mv $(echo $GOOGLE_APPLICATION_CREDENTIALS) .config/application_default_credentials.json
+              mv ~$(echo $GOOGLE_APPLICATION_CREDENTIALS) .config/application_default_credentials.json
               export GOOGLE_APPLICATION_CREDENTIALS=.config/application_default_credentials.json
 
 
