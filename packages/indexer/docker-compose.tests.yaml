@@ -18,7 +18,7 @@ services:
     environment: *common-variables
     volumes:
       - .:/indexer
-      - ./../../creds.json:/creds.json
+      - $GOOGLE_APPLICATION_CREDENTIALS:/creds.json
     build:
       context: .
       dockerfile: Dockerfile
