@@ -12,7 +12,8 @@ min_block_height = 116001
 
 
 async def run_and_upsert_tasks(
-    raw_tasks: List[Coroutine[Any, Any, Raw | None]], pool: Pool
+    raw_tasks: List[Coroutine[Any, Any, Raw | None]],
+    pool: Pool,
 ):
     """Processing a list of coroutines and upserting the results  into the database.
 

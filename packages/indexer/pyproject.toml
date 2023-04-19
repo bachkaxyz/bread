@@ -12,8 +12,8 @@ aiohttp = "^3.8.3"
 aiodns = "^3.0.0"
 asyncpg = "^0.27.0"
 pandas = "^2.0"
-asyncpg-listen = "^0.0.6"
 deepdiff = "^6.3.0"
+google-cloud-storage = "^2.8.0"
 
 
 [tool.poetry.group.dev.dependencies]
