@@ -9,11 +9,11 @@ COPY poetry.lock pyproject.toml ./
 COPY . ./
 
 ENV PYTHONPATH=/indexer
-
+ENV POETRY_VIRTUALENVS_CREATE=false
 FROM indexer-base AS indexer-prod
 
-RUN POETRY_VIRTUALENVS_CREATE=false poetry install -vv --no-cache
+RUN poetry install -vv --no-cache
 
 FROM indexer-base AS indexer-dev
 
-RUN POETRY_VIRTUALENVS_CREATE=false poetry install --with dev -vv --no-cache
+RUN poetry install --with dev -vv --no-cache
