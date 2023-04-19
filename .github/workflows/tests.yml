@@ -13,13 +13,19 @@ jobs:
       steps:
           - uses: actions/checkout@v3
           
+          
           - id: 'auth'
             name: 'Authenticate to Google Cloud'
             uses: 'google-github-actions/auth@v1'
             with:
               credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
               export_environment_variables: true
+          - name: "debug"
+            run: env
           
+          - name: 'Set up Cloud SDK'
+            uses: 'google-github-actions/setup-gcloud@v1'
+
           - name: "Login to Google Cloud"
             run: gcloud iam service-accounts keys create creds.json --iam-account ${{secrets.GCP_SERVICE_ACCOUNT_NAME }}@${{secrets.GCP_PROJECT_ID}}.iam.gserviceaccount.com
 
