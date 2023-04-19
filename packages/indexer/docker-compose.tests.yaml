@@ -7,6 +7,8 @@ x-common-variables:
   - POSTGRES_PORT=5430
   - POSTGRES_HOST=test_postgres
   - INDEXER_SCHEMA=tests
+  - GOOGLE_APPLICATION_CREDENTIALS=creds.json
+  - BUCKET_NAME=sn-mono-indexer-tests
 services:
   indexer-test:
     image: indexer-dev

@@ -143,8 +143,8 @@ async def test_upsert_data(
     logs: List[Log] = []
     [logs.extend(raw.logs) for raw in raws]
     for log, res_log in zip(
-        sorted(logs, key=lambda x: x.txhash),
-        sorted(log_results, key=lambda x: x["txhash"]),
+        sorted(logs, key=lambda x: (x.txhash, x.msg_index)),
+        sorted(log_results, key=lambda x: (x["txhash"], int(x["msg_index"]))),
     ):
         parsed = json.loads(res_log["parsed"])
         formatted_log = {f"{e}_{a}": v for (e, a), v in log.event_attributes.items()}
