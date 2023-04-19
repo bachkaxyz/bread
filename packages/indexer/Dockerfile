@@ -12,8 +12,8 @@ ENV PYTHONPATH=/indexer
 
 FROM indexer-base AS indexer-prod
 
-RUN POETRY_VIRTUALENVS_CREATE=false poetry install -vv
+RUN POETRY_VIRTUALENVS_CREATE=false poetry install -vv --no-cache
 
 FROM indexer-base AS indexer-dev
 
-RUN POETRY_VIRTUALENVS_CREATE=false poetry install --with dev -vv
+RUN POETRY_VIRTUALENVS_CREATE=false poetry install --with dev -vv --no-cache
