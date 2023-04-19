@@ -1,9 +1,13 @@
+import io
+import json
 import os
+from aiohttp import ClientSession
 from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
 from indexer.exceptions import ChainDataIsNoneError
 from indexer.parser import Raw
 import logging
+from google.cloud import storage
 
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
@@ -50,6 +54,7 @@ async def drop_tables(conn: Connection, schema: str):
 
 async def create_tables(conn: Connection, schema: str):
     # we use the path of your current directory to get the absolute path of the sql files depending on where the script is run from
+    await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
     cur_dir = os.path.dirname(__file__)
     file_path = os.path.join(cur_dir, "sql/create_tables.sql")
     with open(file_path, "r") as f:
@@ -103,13 +108,22 @@ async def insert_raw(conn: Connection, raw: Raw):
     # the on conflict clause is used to update the tx_responses and tx_tx_count columns if the raw data already exists but the tx data is new
     await conn.execute(
         f"""
-                INSERT INTO raw(chain_id, height, block, block_tx_count, tx_responses, tx_tx_count)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
+                VALUES ($1, $2, $3, $4)
                 ON CONFLICT ON CONSTRAINT raw_pkey
-                DO UPDATE SET tx_responses = EXCLUDED.tx_responses, tx_tx_count = EXCLUDED.tx_tx_count;
+                DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
                 """,
         *raw.get_raw_db_params(),
     )
+
+    BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
+    storage_client = storage.Client()
+    bucket = storage_client.get_bucket("sn-mono-indexer-dev")  # your bucket name
+    height_blob = bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json")
+    height_blob.upload_from_string(json.dumps(raw.raw_block))
+
+    tx_blob = bucket.blob(f"{raw.chain_id}/txs/{raw.height}.json")
+    tx_blob.upload_from_string(json.dumps(raw.raw_tx))
 
 
 async def insert_block(conn: Connection, raw: Raw):
