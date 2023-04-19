@@ -7,6 +7,9 @@ x-common-variables:
   - POSTGRES_PORT=5430
   - POSTGRES_HOST=test_postgres
   - INDEXER_SCHEMA=tests
+  - BUCKET_NAME=sn-mono-indexer-tests
+  - GOOGLE_APPLICATION_CREDENTIALS=./creds.json
+  - GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID}
 services:
   indexer-test:
     image: indexer-dev
@@ -16,6 +19,7 @@ services:
     environment: *common-variables
     volumes:
       - .:/indexer
+      - $GOOGLE_APPLICATION_CREDENTIALS:/indexer/creds.json
     build:
       context: .
       dockerfile: Dockerfile

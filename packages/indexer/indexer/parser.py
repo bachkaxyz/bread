@@ -278,9 +278,7 @@ class Raw:
         return (
             self.chain_id,
             self.height,
-            json.dumps(self.raw_block),
             self.block_tx_count,
-            json.dumps(self.raw_tx) if self.tx_responses_tx_count > 0 else None,
             self.tx_responses_tx_count,
         )
 

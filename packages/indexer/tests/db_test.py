@@ -143,8 +143,8 @@ async def test_upsert_data(
     logs: List[Log] = []
     [logs.extend(raw.logs) for raw in raws]
     for log, res_log in zip(
-        sorted(logs, key=lambda x: x.txhash),
-        sorted(log_results, key=lambda x: x["txhash"]),
+        sorted(logs, key=lambda x: (x.txhash, x.msg_index)),
+        sorted(log_results, key=lambda x: (x["txhash"], int(x["msg_index"]))),
     ):
         parsed = json.loads(res_log["parsed"])
         formatted_log = {f"{e}_{a}": v for (e, a), v in log.event_attributes.items()}
@@ -195,12 +195,15 @@ async def test_get_missing_blocks(
         await drop_tables(conn, mock_schema)
 
 
-async def upsert_invalid_data(mock_pool: Pool):
-    assert False == await upsert_data(mock_pool, Raw(height=None))
-
+async def test_invalid_upsert_data(mock_pool: Pool, mock_schema: str):
     async with mock_pool.acquire() as conn:
-        with pytest.raises(ChainDataIsNoneError):
-            await insert_block(conn, Raw())
+        await drop_tables(conn, mock_schema)
+    raw = Raw()
+    assert False == await upsert_data(mock_pool, raw)
+
+    with pytest.raises(ChainDataIsNoneError):
+        async with mock_pool.acquire() as conn:
+            await insert_block(conn, raw)
 
 
 async def test_db_max_height(
@@ -216,8 +219,20 @@ async def test_db_max_height(
         async with mock_pool.acquire() as conn:
             await drop_tables(conn, mock_schema)
             await create_tables(conn, mock_schema)
-            assert True == await upsert_data(mock_pool, raw)
+
+        assert True == await upsert_data(mock_pool, raw)
 
         mock_chain.chain_id = raw.chain_id
         async with mock_pool.acquire() as conn:
             assert raws[0].height == await get_max_height(conn, mock_chain)
+
+
+async def test_no_db_max_height(
+    mock_pool: Pool, mock_schema: str, mock_chain: CosmosChain
+):
+    async with mock_pool.acquire() as conn:
+        await drop_tables(conn, mock_schema)
+        await create_tables(conn, mock_schema)
+
+    async with mock_pool.acquire() as conn:
+        assert 0 == await get_max_height(conn, mock_chain)

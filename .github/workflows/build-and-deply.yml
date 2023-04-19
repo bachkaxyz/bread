@@ -29,9 +29,6 @@ jobs:
 
     - name: Authorize Docker push
       run: gcloud auth configure-docker
-      
-    - name: debug
-      run: echo env
 
     - name: Build and push Docker image
       env:
@@ -74,9 +71,6 @@ jobs:
     - name: Authorize Docker push
       run: gcloud auth configure-docker
       
-    - name: debug
-      run: echo env
-
     - name: Build and push Docker image
       env:
         IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest'
@@ -116,10 +110,6 @@ jobs:
 
     - name: Authorize Docker push
       run: gcloud auth configure-docker
-      
-    - name: debug
-      run: echo env
-
     
     - name: Build and push Docker image
       env:
@@ -150,10 +140,6 @@ jobs:
 
     - name: Authorize Docker push
       run: gcloud auth configure-docker
-      
-    - name: debug
-      run: echo env
-
     
     - name: Build and push Docker image
       env:

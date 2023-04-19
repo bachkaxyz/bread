@@ -3,9 +3,7 @@ CREATE SCHEMA IF NOT EXISTS $schema;
 CREATE TABLE IF NOT EXISTS $schema.raw (
     chain_id TEXT NOT NULL,
     height BIGINT NOT NULL,
-    block JSONB,
     block_tx_count BIGINT NOT NULL,
-    tx_responses JSONB,
     tx_tx_count BIGINT NOT NULL, 
     created_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (chain_id, height)
