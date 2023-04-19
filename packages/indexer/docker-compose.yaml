@@ -9,10 +9,8 @@ services:
       - .env
       - ./../../.env
     environment:
-      - GOOGLE_APPLICATION_CREDENTIALS=/indexer/creds.json
     volumes:
       - ./:/indexer
-      - ${GOOGLE_APPLICATION_CREDENTIALS}:/indexer/creds.json
     container_name: indexer
     command: python indexer/main.py
     working_dir: /indexer
