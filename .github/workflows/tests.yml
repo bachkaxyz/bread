@@ -20,9 +20,12 @@ jobs:
               credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
               export_environment_variables: true
           
+          - name: "Move Google Cloud Credentials"
+            run: |
+              mkdir -p ./.conifg
+              mv $GOOGLE_APPLICATION_CREDENTIALS ./.config/application_default_credentials.json
+              export GOOGLE_APPLICATION_CREDENTIALS=./.config/application_default_credentials.json
 
-          - name: debug
-            run: echo $GOOGLE_APPLICATION_CREDENTIALS
 
 
           - name: Docker Compose Run Tests
