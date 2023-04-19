@@ -54,6 +54,7 @@ async def drop_tables(conn: Connection, schema: str):
 
 async def create_tables(conn: Connection, schema: str):
     # we use the path of your current directory to get the absolute path of the sql files depending on where the script is run from
+    await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
     cur_dir = os.path.dirname(__file__)
     file_path = os.path.join(cur_dir, "sql/create_tables.sql")
     with open(file_path, "r") as f:

@@ -20,12 +20,8 @@ jobs:
               credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
               export_environment_variables: true
           
-          - name: "Move Google Cloud Credentials"
-            run: |
-              mkdir -p ./.conifg
-              mv ~$(echo $GOOGLE_APPLICATION_CREDENTIALS) .config/application_default_credentials.json
-              export GOOGLE_APPLICATION_CREDENTIALS=.config/application_default_credentials.json
-
+          - name: "Login to Google Cloud"
+            run: gcloud iam service-accounts keys create creds.json --iam-account ${{secrets.GCP_SERVICE_ACCOUNT_NAME }}@${{secrets.GCP_PROJECT_ID}}.iam.gserviceaccount.com
 
 
           - name: Docker Compose Run Tests
