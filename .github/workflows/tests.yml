@@ -20,14 +20,6 @@ jobs:
             with:
               credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
               export_environment_variables: true
-          - name: "debug"
-            run: |
-              env
-          - name: "debug 2"
-            run: |
-              echo ${{ secrets.GCP_PROJECT_ID }}
-              echo ${{ secrets.GCP_SERVICE_ACCOUNT_NAME }}
-
           
           - name: 'Set up Cloud SDK'
             uses: 'google-github-actions/setup-gcloud@v1'
