@@ -6,14 +6,17 @@ WORKDIR /indexer
 
 COPY poetry.lock pyproject.toml ./
 
-COPY . ./
 
 ENV PYTHONPATH=/indexer
-
+ENV POETRY_VIRTUALENVS_CREATE=false
 FROM indexer-base AS indexer-prod
 
-RUN POETRY_VIRTUALENVS_CREATE=false poetry install -vv
+RUN poetry install -vv --no-cache
+
+COPY . ./
 
 FROM indexer-base AS indexer-dev
 
-RUN POETRY_VIRTUALENVS_CREATE=false poetry install --with dev -vv
+RUN poetry install --with dev -vv --no-cache
+
+COPY . ./

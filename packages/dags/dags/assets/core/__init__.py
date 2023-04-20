@@ -7,17 +7,16 @@ from sqlalchemy import create_engine
 
 @asset(required_resource_keys={"postgres"}, group_name="current_price")
 def create_coin_gecko_id_table(context):
-    engine = create_engine(context.resources.postgres._con)
-    conn = engine.connect()
-    conn = conn.execute(
+    postgres = context.resources.postgres
+    conn = postgres._get_conn()
+    conn.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {context.resources.postgres._schema}.coin_gecko_ids (
             id TEXT PRIMARY KEY
         );
-        """,
+        """
     )
     conn.close()
-    engine.dispose()
 
 
 @asset(
@@ -26,11 +25,10 @@ def create_coin_gecko_id_table(context):
     group_name="current_price",
 )
 def load_coin_gecko_ids(context) -> List[str]:
-    engine = create_engine(context.resources.postgres._con)
-    conn = engine.connect()
-    conn = conn.execute(
-        f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;"
-    )
+    postgres = context.resources.postgres
+    conn = postgres._get_conn()
+
+    conn.execute(f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;")
     results = conn.fetchall()
     conn.close()
     print(results)

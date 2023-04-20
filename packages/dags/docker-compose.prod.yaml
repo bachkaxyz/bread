@@ -1,10 +1,7 @@
 version: '3'
 services:
   dagit:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: dagster-base
+    image: gcr.io/secretnetwork/sn-mono/${GIT_BRANCH}/${GIT_BRANCH}-dagster
     entrypoint:
       - poetry
       - run
@@ -12,24 +9,21 @@ services:
       - -h
       - "0.0.0.0"
       - -p
-      - "3000"
+      - ${DAGSTER_PORT}
       - -w
       - workspace.yaml
     container_name: dagit
     expose:
-      - "3000"
+      - ${DAGSTER_PORT}
     ports:
-      - "3000:3000"
+      - ${DAGSTER_PORT}:${DAGSTER_PORT}
     env_file:
       - .env
       - ./../../.env
     volumes:
       - ./:/dags
   daemon:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: dagster-base
+    image: gcr.io/secretnetwork/sn-mono/${GIT_BRANCH}/${GIT_BRANCH}-dagster
     entrypoint:
       - poetry
       - run
@@ -37,6 +31,8 @@ services:
       - run
     container_name: daemon
     restart: on-failure
+    volumes:
+      - ./:/dags
     env_file:
       - .env
       - ./../../.env

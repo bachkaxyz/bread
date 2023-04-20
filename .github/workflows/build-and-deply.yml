@@ -145,6 +145,6 @@ jobs:
       env:
         IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dagster:latest'
       run: |
-        docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target dagster-base
+        docker build -t $IMAGE_TAG ./packages/dags -f ./packages/dags/Dockerfile --target dagster-base
         docker push $IMAGE_TAG
 

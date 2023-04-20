@@ -43,6 +43,9 @@ class DbIOManager(IOManager):
             con=self._con,
         )
 
+    def _get_conn(self):
+        return create_engine(url=self._con).connect()
+
 
 @io_manager(config_schema={"con_string": str, "schema": str})
 def db_io_manager(context):

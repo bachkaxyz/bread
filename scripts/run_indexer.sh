@@ -14,6 +14,7 @@ elif [ "$ENVIRONMENT" == "production" ]; then
     echo "production mode";
     cd ./packages/indexer;
     docker compose -f docker-compose.yaml down;
+    DOCKER_BUILDKIT=0 docker compose -f docker-compose.yaml build;
     docker compose -f docker-compose.yaml up -d;
     
 elif [ "$ENVIRONMENT" == "development" ]; then
