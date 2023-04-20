@@ -14,9 +14,9 @@ services:
       - workspace.yaml
     container_name: dagit
     expose:
-      - "80"
+      - "8000"
     ports:
-      - "80:80"
+      - "8000:8000"
     env_file:
       - .env
       - ./../../.env
