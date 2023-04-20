@@ -9,14 +9,14 @@ services:
       - -h
       - "0.0.0.0"
       - -p
-      - "80"
+      - ${DAGSTER_PORT}
       - -w
       - workspace.yaml
     container_name: dagit
     expose:
-      - "8000"
+      - ${DAGSTER_PORT}
     ports:
-      - "8000:8000"
+      - ${DAGSTER_PORT}:${DAGSTER_PORT}
     env_file:
       - .env
       - ./../../.env
