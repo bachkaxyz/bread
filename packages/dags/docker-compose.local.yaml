@@ -5,9 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: dagster
     volumes:
-      - .:/dags
-      - .:/dagster_home
-      - .:/dbt_project
+      - ./dags:/dags/dags
+      - ./dagster_home:/dags/dagster_home
+      - ./dbt_project:/dags/dbt_project
+      - ./../indexer/raw_data:/dags/raw_data
     ports:
       - ${DAGSTER_PORT}:${DAGSTER_PORT}
     env_file:

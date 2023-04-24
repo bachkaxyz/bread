@@ -21,7 +21,10 @@ services:
       - .env
       - ./../../.env
     volumes:
-      - ./:/dags
+      - ./dags:/dags/dags
+      - ./dagster_home:/dags/dagster_home
+      - ./dbt_project:/dags/dbt_project
+      - ./../indexer/raw_data:/dags/raw_data
   daemon:
     image: gcr.io/secretnetwork/sn-mono/${GIT_BRANCH}/${GIT_BRANCH}-dagster
     entrypoint:
