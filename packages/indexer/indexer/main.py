@@ -48,6 +48,7 @@ async def main():
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
         server_settings={"search_path": schema_name},
+        command_timeout=60,
     ) as pool:
         async with ClientSession(trust_env=True) as session:
             # initialize logger
