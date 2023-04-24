@@ -8,6 +8,9 @@ from indexer.exceptions import ChainDataIsNoneError
 from indexer.parser import Raw
 import logging
 from google.cloud import storage
+from google.cloud.storage import Blob, Client, Bucket
+import aiofiles
+from aiofiles import os as aos
 
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
@@ -106,24 +109,46 @@ async def upsert_data(pool: Pool, raw: Raw) -> bool:
 
 async def insert_raw(conn: Connection, raw: Raw):
     # the on conflict clause is used to update the tx_responses and tx_tx_count columns if the raw data already exists but the tx data is new
-    await conn.execute(
-        f"""
-                INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT ON CONSTRAINT raw_pkey
-                DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
-                """,
-        *raw.get_raw_db_params(),
-    )
+    logger = logging.getLogger("indexer")
+    raw_data_dir = os.path.join(os.getcwd(), f"raw_data/{raw.chain_id}")
+    blocks_dir = os.path.join(raw_data_dir, "blocks")
+    txs_dir = os.path.join(raw_data_dir, "txs")
+    await aos.makedirs(blocks_dir, exist_ok=True)
+    await aos.makedirs(txs_dir, exist_ok=True)
+    async with aiofiles.open(
+        f"./raw_data/{raw.chain_id}/blocks/{raw.height}.json", "w"
+    ) as hf:
+        async with aiofiles.open(
+            f"./raw_data/{raw.chain_id}/txs/{raw.height}.json", "w"
+        ) as tf:
+            await conn.execute(
+                f"""
+                        INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT ON CONSTRAINT raw_pkey
+                        DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
+                        """,
+                *raw.get_raw_db_params(),
+            )
+            logger.info(f"raw data inserted {raw.height=} to db")
+            await hf.write(json.dumps(raw.raw_block))
+            logger.info(f"raw block inserted {raw.height=} to fs")
+            await tf.write(json.dumps(raw.raw_tx))
+            logger.info(f"raw tx inserted {raw.height=} to fs")
 
-    BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
-    height_blob = bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json")
-    height_blob.upload_from_string(json.dumps(raw.raw_block))
+    # BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
+    # storage_client = storage.Client()
+    # bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
+    # height_blob = bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json")
+    # tx_blob = bucket.blob(f"{raw.chain_id}/txs/{raw.height}.json")
+    # if raw.raw_block:
+    #     insert_json_into_gcs(height_blob, raw.raw_block)
+    # if raw.raw_tx:
+    #     insert_json_into_gcs(tx_blob, raw.raw_tx)
 
-    tx_blob = bucket.blob(f"{raw.chain_id}/txs/{raw.height}.json")
-    tx_blob.upload_from_string(json.dumps(raw.raw_tx))
+
+def insert_json_into_gcs(blob: Blob, data: dict | list):
+    blob.upload_from_string(json.dumps(data))
 
 
 async def insert_block(conn: Connection, raw: Raw):
