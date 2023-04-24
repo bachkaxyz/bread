@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import os
@@ -84,23 +85,28 @@ async def upsert_data(pool: Pool, raw: Raw) -> bool:
     # we check if the data is valid before upserting it
     if raw.height is not None and raw.chain_id is not None:
         async with pool.acquire() as conn:
-            # we do all the upserts in a transaction so that if one fails, all of them fail
-            async with conn.transaction():
+            async with pool.acquire() as conn2:
+                conn: Connection
+                conn2: Connection
+                # we do all the upserts in a transaction so that if one fails, all of them fail
                 await insert_raw(conn, raw)
 
+                tasks = [
+                    insert_many_txs(conn, raw),
+                ]
                 # we are checking if the block is not None because we might only have the tx data and not the block data
                 if raw.block is not None:
                     logger.info(f"raw block height {raw.block.height}")
-                    await insert_block(conn, raw)
+                    tasks.append(insert_block(conn2, raw))
 
-                await insert_many_txs(conn, raw)
+                await asyncio.gather(*tasks)
 
-                await insert_many_log_columns(conn, raw)
+                await asyncio.gather(
+                    insert_many_log_columns(conn2, raw), insert_many_logs(conn, raw)
+                )
 
-                await insert_many_logs(conn, raw)
-
-        logger.info(f"{raw.height=} inserted")
-        return True
+            logger.info(f"{raw.height=} inserted")
+            return True
 
     else:
         logger.info(f"{raw.height} {raw.chain_id} {raw.block}")
@@ -121,20 +127,24 @@ async def insert_raw(conn: Connection, raw: Raw):
         async with aiofiles.open(
             f"./raw_data/{raw.chain_id}/txs/{raw.height}.json", "w"
         ) as tf:
-            await conn.execute(
-                f"""
+            await asyncio.gather(
+                conn.execute(
+                    f"""
                         INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
                         VALUES ($1, $2, $3, $4)
                         ON CONFLICT ON CONSTRAINT raw_pkey
                         DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
                         """,
-                *raw.get_raw_db_params(),
+                    *raw.get_raw_db_params(),
+                ),
+                hf.write(json.dumps(raw.raw_block)),
+                tf.write(json.dumps(raw.raw_tx)),
             )
-            logger.info(f"raw data inserted {raw.height=} to db")
-            await hf.write(json.dumps(raw.raw_block))
-            logger.info(f"raw block inserted {raw.height=} to fs")
-            await tf.write(json.dumps(raw.raw_tx))
-            logger.info(f"raw tx inserted {raw.height=} to fs")
+            logger.info(f"raw data inserted {raw.height=} to db and fs")
+            # await hf.write(json.dumps(raw.raw_block))
+            # logger.info(f"raw block inserted {raw.height=} to fs")
+            # await tf.write(json.dumps(raw.raw_tx))
+            # logger.info(f"raw tx inserted {raw.height=} to fs")
 
     # BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
     # storage_client = storage.Client()
