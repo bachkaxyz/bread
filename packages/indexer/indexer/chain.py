@@ -74,6 +74,7 @@ class CosmosChain(metaclass=Singleton):
     def iterate_api(self):
         """Iterate the current api index"""
         self.current_api_index = (self.current_api_index + 1) % len(self.apis)
+        self.save_api_usage()
 
     def remove_api(self, api: str):
         """Remove an api from the list of apis
@@ -86,6 +87,11 @@ class CosmosChain(metaclass=Singleton):
         except KeyError:
             # if api is not in list of apis, do nothing
             pass
+
+    def save_api_usage(self):
+        """Save the api usage to a file"""
+        with open("api_usage.json", "w") as f:
+            json.dump(self.apis, f)
 
     async def _get(
         self,
