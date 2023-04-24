@@ -37,8 +37,17 @@ async def get_json(resp: ClientResponse) -> dict:
     return json.loads(await resp.read())
 
 
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
 @dataclass
-class CosmosChain:
+class CosmosChain(metaclass=Singleton):
     chain_id: str
     blocks_endpoint: str
     txs_endpoint: str
@@ -115,7 +124,6 @@ class CosmosChain:
 
                 self.add_api_miss(cur_api)
                 self.iterate_api()
-
             retries += 1
         return None, None
 
