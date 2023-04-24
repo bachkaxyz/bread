@@ -19,6 +19,7 @@ from logging import Logger
 async def run(
     pool: Pool,
     session: ClientSession,
+    chain: CosmosChain,
     f: Callable[[ClientSession, CosmosChain, Pool], Coroutine],
 ):
     """
@@ -30,7 +31,6 @@ async def run(
         pool (Pool): The database connection pool
         f (Callable[[ClientSession, CosmosChain, Pool], Coroutine]): The function to run on each iteration of the loop
     """
-    chain = await get_chain_from_environment(session)
     while True:
         await f(session, chain, pool)
         await asyncio.sleep(chain.time_between_blocks)
@@ -78,16 +78,12 @@ async def main():
                 await create_tables(conn, schema_name)
 
             # start indexer
+            chain = await get_chain_from_environment(session)
             await asyncio.gather(
-                run(pool, session, live),
-                run(pool, session, backfill),
+                run(pool, session, chain, live),
+                run(pool, session, chain, backfill),
             )
 
 
 if __name__ == "__main__":
-    while True:
-        try:
-            asyncio.run(main())
-        except:
-            print("Indexer crashed, restarting...")
-            pass
+    asyncio.run(main())
