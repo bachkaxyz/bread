@@ -3,3 +3,4 @@ coverage.xml
 pytest.xml
 indexer.log
 creds.json
+raw_data/*
