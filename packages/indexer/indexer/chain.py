@@ -1,7 +1,8 @@
 import json, traceback
+import time
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TypedDict
 from aiohttp import ClientResponse, ClientSession
 from indexer.exceptions import APIResponseError
 import logging
@@ -10,7 +11,12 @@ ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"
 
 
-Api = Dict[str, int]
+class Api(TypedDict):
+    hit: int
+    miss: int
+    times: List[float]
+
+
 Apis = Dict[str, Api]
 
 
@@ -61,20 +67,23 @@ class CosmosChain(metaclass=Singleton):
         """Get the next api to hit"""
         return list(self.apis.keys())[self.current_api_index]
 
-    def add_api_miss(self, api: str):
+    def add_api_miss(self, api: str, start_time: float, end_time: float):
         """Add a miss to the api"""
         index = list(self.apis.keys()).index(api)
-        list(self.apis.values())[index]["miss"] += 1
+        value = list(self.apis.values())[index]
+        value["miss"] += 1
+        value["times"].append(end_time - start_time)
 
-    def add_api_hit(self, api: str):
+    def add_api_hit(self, api: str, start_time: float, end_time: float):
         """Add a hit to the api"""
         index = list(self.apis.keys()).index(api)
-        list(self.apis.values())[index]["hit"] += 1
+        value = list(self.apis.values())[index]
+        value["hit"] += 1
+        value["times"].append(end_time - start_time)
 
     def iterate_api(self):
         """Iterate the current api index"""
         self.current_api_index = (self.current_api_index + 1) % len(self.apis)
-        self.save_api_usage()
 
     def remove_api(self, api: str):
         """Remove an api from the list of apis
@@ -88,10 +97,23 @@ class CosmosChain(metaclass=Singleton):
             # if api is not in list of apis, do nothing
             pass
 
-    def save_api_usage(self):
+    def get_api_usage(self):
         """Save the api usage to a file"""
-        with open("api_usage.json", "w") as f:
-            json.dump(self.apis, f)
+
+        return [
+            {
+                "api": s_api,
+                "hit": api["hit"],
+                "miss": api["miss"],
+                "average_time_per_call": sum(api["times"]) / len(api["times"]),
+                "total_time": sum(api["times"]),
+                "total_calls": api["hit"] + api["miss"],
+                "hit_rate": api["hit"] / (api["hit"] + api["miss"]),
+                "miss_rate": api["miss"] / (api["hit"] + api["miss"]),
+            }
+            for s_api, api in self.apis.items()
+            if len(api["times"]) > 0
+        ]
 
     async def _get(
         self,
@@ -117,18 +139,21 @@ class CosmosChain(metaclass=Singleton):
 
         while retries < max_retries:
             cur_api = self.get_next_api()
+            start_time = time.time()
             try:
                 async with session.get(f"{cur_api}{endpoint}") as resp:
                     if await is_valid_response(resp):
-                        self.add_api_hit(cur_api)
+                        end_time = time.time()
+                        self.add_api_hit(cur_api, start_time, end_time)
                         return cur_api, await get_json(resp)
                     else:
                         raise APIResponseError("API Response Not Valid")
             except BaseException as e:
+                end_time = time.time()
                 logger = logging.getLogger("indexer")
                 logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
 
-                self.add_api_miss(cur_api)
+                self.add_api_miss(cur_api, start_time, end_time)
                 self.iterate_api()
             retries += 1
         return None, None
@@ -269,7 +294,7 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, Apis]:
         raise EnvironmentError(
             "No APIS. Either provide your own apis through APIS or turn LOAD_CHAIN_REGISTRY_APIS to True"
         )
-    formatted_apis = {api: {"hit": 0, "miss": 0} for api in apis}
+    formatted_apis = {api: Api({"hit": 0, "miss": 0, "times": []}) for api in apis}
     return chain_id, formatted_apis
 
 

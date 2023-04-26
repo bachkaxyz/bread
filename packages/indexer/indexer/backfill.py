@@ -1,10 +1,18 @@
 import asyncio
 from asyncio import Future
+import json
+import time
 from typing import Any, Coroutine, List, Generator, Awaitable
 from aiohttp import ClientSession
 from asyncpg import Pool, Connection
 from indexer.chain import CosmosChain
-from indexer.db import missing_blocks_cursor, wrong_tx_count_cursor, upsert_data
+from indexer.db import (
+    missing_blocks_cursor,
+    wrong_tx_count_cursor,
+    upsert_data,
+    blob_upload_times,
+    upsert_times,
+)
 from indexer.parser import Raw, process_tx, process_block
 import logging
 
@@ -30,7 +38,12 @@ async def run_and_upsert_tasks(
         await asyncio.gather(*upsert_tasks)
 
 
+while_times = []
+hun_times = []
+
+
 async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
+    global while_times, hun_times
     """Backfilling the database with historical data.
 
     Args:
@@ -98,7 +111,9 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                 )  # the min height to query during this iteration
                 current_height = max_height
                 # query in batches while the current height is greater than the min height
+                hun_start_time = time.time()
                 while current_height > min_height:
+                    while_start_time = time.time()
                     # check if the next iteration will be less than the min height and set lower bound accordingly
                     if current_height - chain.step_size > min_height:
                         query_lower_bound = current_height - chain.step_size
@@ -110,18 +125,93 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
 
                     # query and process the blocks in the range
                     tasks: List[Coroutine] = [
-                        get_data_historical(session, chain, h)
+                        get_data_historical(session, chain, h, pool)
                         for h in range(current_height, query_lower_bound, -1)
                     ]
-                    await run_and_upsert_tasks(tasks, pool)
+                    # await run_and_upsert_tasks(tasks, pool)
+                    await asyncio.gather(*tasks)
 
                     logger.info("backfill - data upserted")
+                    while_end_time = time.time()
+                    while_times.append(
+                        (
+                            while_end_time - while_start_time,
+                            current_height - query_lower_bound,
+                        )
+                    )
+                    logger.debug(
+                        f"backfill - while loop took {while_end_time - while_start_time} seconds"
+                    )
                     current_height = query_lower_bound
+                    save_analytics(
+                        hun_times, while_times, blob_upload_times, upsert_times, chain
+                    )
+
+                hun_end_time = time.time()
+                hun_times.append((time.time() - hun_start_time, dif))
+                save_analytics(
+                    hun_times, while_times, blob_upload_times, upsert_times, chain
+                )
+
     logger.info("backfill - finish backfill task")
 
 
+def save_analytics(
+    hun_times, while_times, blob_times, upsert_times, chain: CosmosChain
+):
+    api_usage = chain.get_api_usage()
+    with open("times.json", "w") as f:
+        upsert_data, while_data, hun_data, blob_data = {}, {}, {}, {}
+        just_times_hun = [t[0] for t in hun_times]
+        just_times_while = [t[0] for t in while_times]
+        if len(just_times_hun) > 0:
+            hun_data = {
+                "avg": sum(just_times_hun) / len(just_times_hun),
+                "time_per_block": sum(just_times_hun) / sum([t[1] for t in hun_times]),
+                "total": sum(just_times_hun),
+                "number_times": len(just_times_hun),
+            }
+
+        if len(just_times_while) > 0:
+            while_data = (
+                {
+                    "avg": sum(just_times_while) / len(just_times_while),
+                    "time_per_block": sum(just_times_while)
+                    / sum([t[1] for t in while_times]),
+                    "total": sum(just_times_while),
+                    "number_times": len(just_times_while),
+                },
+            )
+
+        if len(blob_times) > 0:
+            blob_data = (
+                {
+                    "avg": sum(blob_upload_times) / len(blob_upload_times),
+                    "number_upload": len(blob_upload_times),
+                    "total_time": sum(blob_upload_times),
+                },
+            )
+
+        if len(upsert_times) > 0:
+            upsert_data = {
+                "avg": sum(upsert_times) / len(upsert_times),
+                "number_upserts": len(upsert_times),
+                "total_time": sum(upsert_times),
+                "time_per_block": sum(upsert_times) / len(upsert_times),
+            }
+
+        data = {
+            "hun_times": hun_data,
+            "while_times": while_data,
+            "blob_upload": blob_data,
+            "upsert_times": upsert_data,
+            "api_usage": api_usage,
+        }
+        json.dump(data, f)
+
+
 async def get_data_historical(
-    session: ClientSession, chain: CosmosChain, height: int
+    session: ClientSession, chain: CosmosChain, height: int, pool: Pool
 ) -> Raw | None:
     """Historical data processing for a single block.
 
@@ -137,7 +227,8 @@ async def get_data_historical(
     logger = logging.getLogger("indexer")
     logger.info(f"block returned {height=}")
     if block_res_json is not None:
-        return await process_block(block_res_json, session, chain)
+        block = await process_block(block_res_json, session, chain)
+        await upsert_data(pool, block)
     else:
         logger.info("block data is None")
         return None

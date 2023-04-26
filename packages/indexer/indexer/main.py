@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from typing import Callable, Coroutine
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 
 from asyncpg import Pool, create_pool
 from indexer.backfill import backfill
@@ -50,7 +50,9 @@ async def main():
         server_settings={"search_path": schema_name},
         command_timeout=60,
     ) as pool:
-        async with ClientSession(trust_env=True) as session:
+        async with ClientSession(
+            trust_env=True, timeout=ClientTimeout(total=60)
+        ) as session:
             # initialize logger
             USE_LOG_FILE = os.getenv("USE_LOG_FILE", "TRUE").upper() == "TRUE"
             if USE_LOG_FILE is False:
