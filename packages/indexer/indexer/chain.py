@@ -20,7 +20,7 @@ class Api(TypedDict):
 Apis = Dict[str, Api]
 
 
-async def is_valid_response(resp: ClientResponse) -> bool:
+async def is_valid_response(r, resp: ClientResponse) -> bool:
     """Check if the response is in the correct format
 
     Args:
@@ -32,15 +32,11 @@ async def is_valid_response(resp: ClientResponse) -> bool:
     # could we return specific error messages here to save to db?
     try:
         return (
-            list((await get_json(resp)).keys()) != ["code", "message", "details"]
+            list(json.loads(r).keys()) != ["code", "message", "details"]
             and resp.status == 200
         )
     except Exception as e:
         return False
-
-
-async def get_json(resp: ClientResponse) -> dict:
-    return json.loads(await resp.read())
 
 
 class Singleton(type):
@@ -142,10 +138,11 @@ class CosmosChain(metaclass=Singleton):
             start_time = time.time()
             try:
                 async with session.get(f"{cur_api}{endpoint}") as resp:
-                    if await is_valid_response(resp):
+                    r = await resp.read()
+                    if await is_valid_response(r, resp):
                         end_time = time.time()
                         self.add_api_hit(cur_api, start_time, end_time)
-                        return cur_api, await get_json(resp)
+                        return cur_api, json.loads(r)
                     else:
                         raise APIResponseError("API Response Not Valid")
             except BaseException as e:
@@ -236,7 +233,7 @@ async def query_chain_registry(session: ClientSession, chain_registry_name: str)
     async with session.get(
         url=f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_registry_name}/chain.json"
     ) as raw:
-        return await get_json(raw)
+        return json.loads(await raw.read())
 
 
 async def get_chain_registry_info(
@@ -305,7 +302,7 @@ async def remove_bad_apis(
     for i, (api, hit_miss) in enumerate(apis.items()):
         try:
             async with session.get(f"{api}{blocks_endpoint.format('latest')}") as res:
-                j = await get_json(res)
+                j = json.loads(await res.read())
                 api_heights.append((api, hit_miss, int(j["block"]["header"]["height"])))
         except Exception as e:
             logger = logging.getLogger("indexer")

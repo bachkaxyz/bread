@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import Future
+from asyncio import Future, Task
 import json
 import time
 from typing import Any, Coroutine, List, Generator, Awaitable
@@ -20,22 +20,22 @@ min_block_height = 116001
 
 
 async def run_and_upsert_tasks(
-    raw_tasks: List[Coroutine[Any, Any, Raw | None]],
+    raw_tasks: List[Task[Raw | None]],
     pool: Pool,
 ):
     """Processing a list of coroutines and upserting the results  into the database.
 
     Args:
-        `raw_tasks (List[Future  |  Generator  |  Awaitable])`: List of coroutines to run.
+        `raw_tasks (List[Task])`: List of coroutines to run.
         `pool (Pool)`: Database connection pool.
     """
-    results: List[Raw | None] = await asyncio.gather(*raw_tasks)
     upsert_tasks = []
-    for res in results:
-        if res:
-            upsert_tasks.append(upsert_data(pool, res))
-    if upsert_tasks:
-        await asyncio.gather(*upsert_tasks)
+    for task in asyncio.as_completed(raw_tasks):
+        raw = await task
+        if raw:
+            upsert_tasks.append(asyncio.create_task(upsert_data(pool, raw)))
+
+    await asyncio.gather(*upsert_tasks)
 
 
 while_times = []
@@ -71,16 +71,9 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                 )
                 # since the block has already been processed, we can just process the txs
 
-                raw_tasks.append(process_tx(raw, session, chain))
+                raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
 
-                # we are batching the txs to be processed for performance
-                if len(raw_tasks) > chain.batch_size:
-                    await run_and_upsert_tasks(raw_tasks, pool)
-                    raw_tasks = []
-
-            # process the remaining txs
             await run_and_upsert_tasks(raw_tasks, pool)
-            raw_tasks = []
 
             # check for missing blocks
             async for (height, dif) in missing_blocks_cursor(cursor_conn, chain):
@@ -124,12 +117,14 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                     )
 
                     # query and process the blocks in the range
-                    tasks: List[Coroutine] = [
-                        get_data_historical(session, chain, h, pool)
+                    tasks: List[Task[Raw | None]] = [
+                        asyncio.create_task(
+                            get_data_historical(session, chain, h, pool)
+                        )
                         for h in range(current_height, query_lower_bound, -1)
                     ]
-                    # await run_and_upsert_tasks(tasks, pool)
-                    await asyncio.gather(*tasks)
+
+                    await run_and_upsert_tasks(tasks, pool)
 
                     logger.info("backfill - data upserted")
                     while_end_time = time.time()
@@ -160,7 +155,7 @@ def save_analytics(
     hun_times, while_times, blob_times, upsert_times, chain: CosmosChain
 ):
     api_usage = chain.get_api_usage()
-    with open("times.json", "w") as f:
+    with open("usage.json", "w") as f:
         upsert_data, while_data, hun_data, blob_data = {}, {}, {}, {}
         just_times_hun = [t[0] for t in hun_times]
         just_times_while = [t[0] for t in while_times]
@@ -227,8 +222,7 @@ async def get_data_historical(
     logger = logging.getLogger("indexer")
     logger.info(f"block returned {height=}")
     if block_res_json is not None:
-        block = await process_block(block_res_json, session, chain)
-        await upsert_data(pool, block)
+        return await process_block(block_res_json, session, chain)
     else:
         logger.info("block data is None")
         return None

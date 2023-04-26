@@ -5,3 +5,4 @@ indexer.log
 creds.json
 raw_data/*
 api_usage.json
+usage.json
