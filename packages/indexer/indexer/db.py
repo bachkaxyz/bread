@@ -3,6 +3,7 @@ import io
 import json
 import os
 import time
+import traceback
 from aiohttp import ClientSession
 from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
@@ -13,6 +14,15 @@ from google.cloud import storage
 from google.cloud.storage import Blob, Client, Bucket
 import aiofiles
 from aiofiles import os as aos
+
+# bucket config
+BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
+storage_client = storage.Client()
+bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
+
+# timing
+blob_upload_times = []
+upsert_times = []
 
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
@@ -71,10 +81,26 @@ async def create_tables(conn: Connection, schema: str):
         await conn.execute(f.read().replace("$schema", schema))
 
 
-upsert_times = []
+async def upsert_data(pool: Pool, raw: Raw):
+    loop = asyncio.get_event_loop()
+    await asyncio.gather(
+        upsert_data_to_db(pool, raw),
+        loop.run_in_executor(
+            None,
+            insert_json_into_gcs,
+            bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json"),
+            raw.raw_block,
+        ),
+        loop.run_in_executor(
+            None,
+            insert_json_into_gcs,
+            bucket.blob(f"{raw.chain_id}/txs/{raw.height}.json"),
+            raw.raw_tx,
+        ),
+    )
 
 
-async def upsert_data(pool: Pool, raw: Raw) -> bool:
+async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
     global upsert_times
     """Upsert a blocks data into the database
 
@@ -120,83 +146,33 @@ async def upsert_data(pool: Pool, raw: Raw) -> bool:
         return False
 
 
-BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
-storage_client = storage.Client()
-bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
-
-
 async def insert_raw(conn: Connection, raw: Raw):
-    # the on conflict clause is used to update the tx_responses and tx_tx_count columns if the raw data already exists but the tx data is new
-    # logger = logging.getLogger("indexer")
-    # raw_data_dir = os.path.join(os.getcwd(), f"raw_data/{raw.chain_id}")
-    # blocks_dir = os.path.join(raw_data_dir, "blocks")
-    # txs_dir = os.path.join(raw_data_dir, "txs")
-    # await aos.makedirs(blocks_dir, exist_ok=True)
-    # await aos.makedirs(txs_dir, exist_ok=True)
-    # async with aiofiles.open(
-    #     f"./raw_data/{raw.chain_id}/blocks/{raw.height}.json", "w"
-    # ) as hf:
-    #     async with aiofiles.open(
-    #         f"./raw_data/{raw.chain_id}/txs/{raw.height}.json", "w"
-    #     ) as tf:
-    #         await asyncio.gather(
-    #             conn.execute(
-    #                 f"""
-    #                     INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
-    #                     VALUES ($1, $2, $3, $4)
-    #                     ON CONFLICT ON CONSTRAINT raw_pkey
-    #                     DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
-    #                     """,
-    #                 *raw.get_raw_db_params(),
-    #             ),
-    #             hf.write(json.dumps(raw.raw_block)),
-    #             tf.write(json.dumps(raw.raw_tx)),
-    #         )
-    #         logger.info(f"raw data inserted {raw.height=} to db and fs")
-    #         # await hf.write(json.dumps(raw.raw_block))
-    #         # logger.info(f"raw block inserted {raw.height=} to fs")
-    #         # await tf.write(json.dumps(raw.raw_tx))
-    #         # logger.info(f"raw tx inserted {raw.height=} to fs")
     loop = asyncio.get_event_loop()
-    await asyncio.gather(
-        conn.execute(
-            f"""
+    await conn.execute(
+        f"""
                         INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
                         VALUES ($1, $2, $3, $4)
                         ON CONFLICT ON CONSTRAINT raw_pkey
                         DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
                         """,
-            *raw.get_raw_db_params(),
-        ),
-        loop.run_in_executor(
-            None,
-            insert_json_into_gcs,
-            bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json"),
-            raw.raw_block,
-        ),
-        loop.run_in_executor(
-            None,
-            insert_json_into_gcs,
-            bucket.blob(f"{raw.chain_id}/txs/{raw.height}.json"),
-            raw.raw_tx,
-        ),
+        *raw.get_raw_db_params(),
     )
-
-    # height_blob = bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json")
-    # tx_blob = bucket.blob(f"{raw.chain_id}/txs/{raw.height}.json")
-    # if raw.raw_block:
-    #     insert_json_into_gcs(height_blob, raw.raw_block)
-    # if raw.raw_tx:
-    #     insert_json_into_gcs(tx_blob, raw.raw_tx)
-
-
-blob_upload_times = []
 
 
 def insert_json_into_gcs(blob: Blob, data: dict | list):
     global blob_upload_times
     start_time = time.time()
-    blob.upload_from_string(json.dumps(data))
+    while True:
+        try:
+            blob.upload_from_string(json.dumps(data))
+            break
+        except Exception as e:
+            logger = logging.getLogger("indexer")
+            logger.error(
+                f"blob upload failed, retrying in 1 second {traceback.format_exc()}"
+            )
+            time.sleep(1)
+
     finish_time = time.time()
     blob_upload_times.append(finish_time - start_time)
 
