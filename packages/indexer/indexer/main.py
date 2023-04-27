@@ -4,7 +4,7 @@ import json
 import logging
 import os
 from typing import Callable, Coroutine
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientTimeout
 
 from asyncpg import Pool, create_pool
 from indexer.backfill import backfill
@@ -12,6 +12,7 @@ from indexer.backfill import backfill
 from indexer.chain import get_chain_from_environment, CosmosChain
 from indexer.db import create_tables, drop_tables
 from indexer.live import live
+from google.cloud.storage import Client, Bucket
 
 from logging import Logger
 
@@ -19,7 +20,9 @@ from logging import Logger
 async def run(
     pool: Pool,
     session: ClientSession,
-    f: Callable[[ClientSession, CosmosChain, Pool], Coroutine],
+    chain: CosmosChain,
+    bucket: Bucket,
+    f: Callable[[ClientSession, CosmosChain, Pool, Bucket], Coroutine],
 ):
     """
     The entry point of each process (live and backfill). This function controls the while loop that runs each portion of the indexer.
@@ -30,9 +33,8 @@ async def run(
         pool (Pool): The database connection pool
         f (Callable[[ClientSession, CosmosChain, Pool], Coroutine]): The function to run on each iteration of the loop
     """
-    chain = await get_chain_from_environment(session)
     while True:
-        await f(session, chain, pool)
+        await f(session, chain, pool, bucket)
         await asyncio.sleep(chain.time_between_blocks)
 
 
@@ -48,8 +50,11 @@ async def main():
         password=os.getenv("POSTGRES_PASSWORD"),
         database=os.getenv("POSTGRES_DB"),
         server_settings={"search_path": schema_name},
+        command_timeout=60,
     ) as pool:
-        async with ClientSession(trust_env=True) as session:
+        async with ClientSession(
+            trust_env=True, timeout=ClientTimeout(total=60)
+        ) as session:
             # initialize logger
             USE_LOG_FILE = os.getenv("USE_LOG_FILE", "TRUE").upper() == "TRUE"
             if USE_LOG_FILE is False:
@@ -78,9 +83,14 @@ async def main():
                 await create_tables(conn, schema_name)
 
             # start indexer
+            chain = await get_chain_from_environment(session)
+            BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
+            storage_client = Client()
+            bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
+
             await asyncio.gather(
-                run(pool, session, live),
-                run(pool, session, backfill),
+                run(pool, session, chain, bucket, live),
+                run(pool, session, chain, bucket, backfill),
             )
 
 

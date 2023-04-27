@@ -13,20 +13,10 @@ as
         column_name := NEW.event || '_' || NEW.attribute;
         IF NEW.parse = TRUE THEN
             EXECUTE format(
-                'ALTER TABLE $schema.logs ADD COLUMN IF NOT EXISTS %I JSONB DEFAULT NULL',
+                'ALTER TABLE $schema.logs ADD COLUMN IF NOT EXISTS %I JSONB GENERATED ALWAYS AS (parsed->%L) STORED',
+                column_name,
                 column_name
             );
-            FOR row IN kv_logs(column_name)
-            LOOP
-                EXECUTE format(
-                    'UPDATE $schema.logs SET %I = %L, updated_at=NOW() WHERE txhash = %L AND msg_index = %L',
-                    column_name,
-                    row.value,
-                    row.txhash,
-                    row.msg_index
-                );
-            END LOOP;
-            
         ELSE
             EXECUTE format(
                 'ALTER TABLE $schema.logs DROP COLUMN IF EXISTS %I',
@@ -42,27 +32,3 @@ CREATE OR REPLACE TRIGGER log_column_change
 AFTER UPDATE
 ON $schema.log_columns
 FOR EACH ROW EXECUTE PROCEDURE on_log_column_change();
-
-create or replace function log_insert()
-returns trigger
-as
-    $$
-    DECLARE
-        cur_log_columns cursor for 
-            select event || '_' || attribute as column_name
-            from $schema.log_columns
-            where parse = TRUE;
-    BEGIN
-        FOR row IN cur_log_columns
-        LOOP
-            EXECUTE 'UPDATE $schema.logs SET ' || row.column_name ||' = parsed->' || quote_literal(row.column_name) || ', updated_at=NOW() WHERE txhash =' || quote_literal(NEW.txhash) || ' AND msg_index =' || quote_literal(NEW.msg_index::TEXt) || ';';
-        END LOOP;
-        RETURN NEW;
-    END
-$$
-language plpgsql
-;
-CREATE OR REPLACE TRIGGER log_insert
-AFTER INSERT
-on $schema.logs
-FOR EACH ROW EXECUTE PROCEDURE log_insert();

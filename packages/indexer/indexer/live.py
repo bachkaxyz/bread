@@ -5,12 +5,13 @@ from indexer.db import upsert_data, get_max_height
 from indexer.parser import Raw
 from indexer.parser import process_block
 import logging
+from google.cloud.storage import Bucket
 
 # this is outside of live so that it can be accessed by the live function on every iteration
 current_height = 0
 
 
-async def live(session: ClientSession, chain: CosmosChain, pool: Pool):
+async def live(session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket):
     """Pull live data from the chain and upsert it into the database.
 
     Args:
@@ -20,13 +21,13 @@ async def live(session: ClientSession, chain: CosmosChain, pool: Pool):
     """
     global current_height
     logger = logging.getLogger("indexer")
-    logger.info(f"pulling live data {current_height=}")
+    logger.info(f"live - pulling live data {current_height=}")
 
     # since we are using a global variable, we need to check if it is 0 and if so, get the max height from the database
     if current_height == 0:
         async with pool.acquire() as conn:
             current_height = await get_max_height(conn, chain)
-            logger.info(f"max height from db is {current_height=}")
+            logger.info(f"live - max height from db is {current_height=}")
 
     # get the latest block from the chain
     raw = await get_data_live(session, chain, current_height)
@@ -34,9 +35,9 @@ async def live(session: ClientSession, chain: CosmosChain, pool: Pool):
     # if the latest block is defined and it is new, upsert it into the database
     if raw and raw.height and raw.height > current_height:
         current_height = raw.height
-        logger.info(f"upserting new height {raw.height=}")
-        await upsert_data(pool, raw)
-    logger.info("upserting finished")
+        logger.info(f"live - upserting new height {raw.height=}")
+        await upsert_data(pool, raw, bucket)
+    logger.info("live - upserting finished")
 
 
 async def get_data_live(
@@ -61,9 +62,9 @@ async def get_data_live(
             return await process_block(block_res_json, session, chain)
         else:
             logger.info(
-                f"block already processed {block_json_height=} {current_height=}"
+                f"live - block already processed {block_json_height=} {current_height=}"
             )
             return None
     else:
-        logger.info("block data is none")
+        logger.info("live - block data is none")
         return None

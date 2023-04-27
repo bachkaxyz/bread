@@ -8,6 +8,7 @@ from indexer.chain import (
     get_chain_from_environment,
     query_chain_registry,
     remove_bad_apis,
+    Api,
 )
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,10 +21,15 @@ def mock_client():
 
 
 @pytest.fixture
-def mock_chain():
+def emptyApi():
+    return Api({"hit": 0, "miss": 0, "times": []})
+
+
+@pytest.fixture
+def mock_chain(emptyApi: Api):
     apis = {
-        "https://mock_api.com/": {"hit": 0, "miss": 0},
-        "https://mock_api2.com/": {"hit": 0, "miss": 0},
+        "https://mock_api.com/": emptyApi,
+        "https://mock_api2.com/": emptyApi,
     }
     chain = CosmosChain(
         chain_id="mock_chain_id",
@@ -159,7 +165,9 @@ async def test_chain_environment_time_between_blocks_not_int(mock_client):
     os.environ["TIME_BETWEEN_BLOCKS"] = "1"
 
 
-async def test_chain_environment_pass(mock_client: ClientSession, mocker):
+async def test_chain_environment_pass(
+    mock_client: ClientSession, mocker, emptyApi: Api
+):
     chain_reg = {
         "chain_name": "jackal",
         "chain_id": "jackal-1",
@@ -200,8 +208,8 @@ async def test_chain_environment_pass(mock_client: ClientSession, mocker):
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={
-                "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
-                "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
+                "https://api.jackalprotocol.com": emptyApi,
+                "https://jackal-api.lavenderfive.com:443": emptyApi,
             },
             current_api_index=0,
             time_between_blocks=1,
@@ -226,8 +234,8 @@ async def test_chain_environment_pass(mock_client: ClientSession, mocker):
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={
-                "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
-                "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
+                "https://api.jackalprotocol.com": emptyApi,
+                "https://jackal-api.lavenderfive.com:443": emptyApi,
             },
             current_api_index=0,
             time_between_blocks=1,
@@ -244,10 +252,10 @@ async def test_chain_environment_pass(mock_client: ClientSession, mocker):
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={
-                "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
-                "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
-                "https://api2.jackalprotocol.com": {"hit": 0, "miss": 0},
-                "https://jackal-api2.lavenderfive.com:443": {"hit": 0, "miss": 0},
+                "https://api.jackalprotocol.com": emptyApi,
+                "https://jackal-api.lavenderfive.com:443": emptyApi,
+                "https://api2.jackalprotocol.com": emptyApi,
+                "https://jackal-api2.lavenderfive.com:443": emptyApi,
             },
             current_api_index=0,
             time_between_blocks=1,
@@ -264,8 +272,8 @@ async def test_chain_environment_pass(mock_client: ClientSession, mocker):
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={
-                "https://api.jackalprotocol.com": {"hit": 0, "miss": 0},
-                "https://jackal-api.lavenderfive.com:443": {"hit": 0, "miss": 0},
+                "https://api.jackalprotocol.com": emptyApi,
+                "https://jackal-api.lavenderfive.com:443": emptyApi,
             },
             current_api_index=0,
             time_between_blocks=1,
@@ -298,7 +306,7 @@ async def test_query_chain_registry(mock_client):
     assert await query_chain_registry(mock_client, "jackal") == chain_reg
 
 
-async def test_remove_bad_api_exception(mock_client):
+async def test_remove_bad_api_exception(mock_client, emptyApi: Api):
     invalid_json = {
         "block": {
             "height": "1",
@@ -313,6 +321,6 @@ async def test_remove_bad_api_exception(mock_client):
     with pytest.raises(BaseException):
         await remove_bad_apis(
             mock_client,
-            {"https://api.jackalprotocol.com": {"hit": 0, "miss": 0}},
+            {"https://api.jackalprotocol.com": emptyApi},
             "blocks/",
         )
