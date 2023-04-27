@@ -88,10 +88,14 @@ async def main():
             storage_client = Client()
             bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
 
-            await asyncio.gather(
+            exceptions = await asyncio.gather(
                 run(pool, session, chain, bucket, live),
                 run(pool, session, chain, bucket, backfill),
+                return_exceptions=True,
             )
+            for e in exceptions:
+                if e is not None:
+                    logging.error(e)
 
 
 if __name__ == "__main__":
