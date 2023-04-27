@@ -26,7 +26,8 @@ as
         RETURN NEW;
     END
 $$
-language plpgsql;
+language plpgsql
+;
 CREATE OR REPLACE TRIGGER log_column_change
 AFTER UPDATE
 ON $schema.log_columns
