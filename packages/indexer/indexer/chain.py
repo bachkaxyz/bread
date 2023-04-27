@@ -61,7 +61,6 @@ class CosmosChain(metaclass=Singleton):
 
     def get_next_api(self) -> str:
         """Get the next api to hit"""
-        print(len(self.apis), self.current_api_index)
         if len(self.apis) == 1:
             return list(self.apis.keys())[0]
         return list(self.apis.keys())[self.current_api_index]
