@@ -76,11 +76,15 @@ async def main():
             # manage tables on startup if needed
             async with pool.acquire() as conn:
                 DROP_TABLES_ON_STARTUP = (
-                    os.getenv("DROP_TABLES_ON_STARTUP", "True").upper() == "TRUE"
+                    os.getenv("DROP_TABLES_ON_STARTUP", "False").upper() == "TRUE"
+                )
+                CREATE_TABLES_ON_STARTUP = (
+                    os.getenv("CREATE_TABLES_ON_STARTUP", "false").upper() == "TRUE"
                 )
                 if DROP_TABLES_ON_STARTUP:
                     await drop_tables(conn, schema_name)
-                await create_tables(conn, schema_name)
+                if CREATE_TABLES_ON_STARTUP:
+                    await create_tables(conn, schema_name)
 
             # start indexer
             chain = await get_chain_from_environment(session)
