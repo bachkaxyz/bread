@@ -4,3 +4,4 @@ creds.json
 coverage.xml
 pytest.xml
 indexer.log
+usage.json

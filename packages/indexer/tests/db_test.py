@@ -7,16 +7,17 @@ from indexer.chain import CosmosChain
 from indexer.db import create_tables, drop_tables, upsert_data, get_max_height
 from indexer.parser import Block, Raw, Tx, Log
 from deepdiff import DeepDiff
-
+from google.cloud import storage
+from google.cloud.storage import Blob, Client, Bucket
 
 import pytest
 from asyncpg import Connection, Pool, create_pool
 
-from indexer.db import missing_blocks_cursor, insert_block
+from indexer.db import missing_blocks_cursor, insert_block, insert_json_into_gcs
 from indexer.exceptions import ChainDataIsNoneError
 
 # fixtures
-from tests.chain_test import mock_chain, mock_client
+from tests.chain_test import mock_chain, emptyApi, mock_client
 from tests.parser_test import raws, unparsed_raw_data
 
 
@@ -36,6 +37,14 @@ async def mock_pool(mock_schema):
         server_settings={"search_path": mock_schema},
     )
     return pool
+
+
+@pytest.fixture
+def mock_bucket():
+    BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
+    storage_client = storage.Client()
+    bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
+    return bucket
 
 
 async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
@@ -68,6 +77,7 @@ async def test_upsert_data(
     mock_schema: str,
     mock_chain: CosmosChain,
     mock_client: ClientSession,
+    mock_bucket: Bucket,
     raws: List[Raw],
 ):
     async with mock_pool.acquire() as conn:
@@ -75,7 +85,9 @@ async def test_upsert_data(
         await drop_tables(conn, mock_schema)
         await create_tables(conn, mock_schema)
 
-        await asyncio.gather(*[upsert_data(mock_pool, raw) for raw in raws])
+        await asyncio.gather(
+            *[upsert_data(mock_pool, raw, mock_bucket) for raw in raws]
+        )
 
         raw_results = await conn.fetch("select * from raw order by height asc")
 
@@ -173,14 +185,20 @@ async def test_upsert_data(
 
 
 async def test_get_missing_blocks(
-    raws: List[Raw], mock_pool: Pool, mock_schema: str, mock_chain: CosmosChain
+    raws: List[Raw],
+    mock_pool: Pool,
+    mock_schema: str,
+    mock_chain: CosmosChain,
+    mock_bucket: Bucket,
 ):
     async with mock_pool.acquire() as conn:
         conn: Connection
         await drop_tables(conn, mock_schema)
         await create_tables(conn, mock_schema)
 
-        await asyncio.gather(*[upsert_data(mock_pool, raw) for raw in raws])
+        await asyncio.gather(
+            *[upsert_data(mock_pool, raw, mock_bucket) for raw in raws]
+        )
 
         mock_chain.chain_id = "jackal-1"
 
@@ -195,11 +213,13 @@ async def test_get_missing_blocks(
         await drop_tables(conn, mock_schema)
 
 
-async def test_invalid_upsert_data(mock_pool: Pool, mock_schema: str):
+async def test_invalid_upsert_data(
+    mock_pool: Pool, mock_schema: str, mock_bucket: Bucket
+):
     async with mock_pool.acquire() as conn:
         await drop_tables(conn, mock_schema)
     raw = Raw()
-    assert False == await upsert_data(mock_pool, raw)
+    assert False == await upsert_data(mock_pool, raw, mock_bucket)
 
     with pytest.raises(ChainDataIsNoneError):
         async with mock_pool.acquire() as conn:
@@ -213,6 +233,7 @@ async def test_db_max_height(
     mock_chain: CosmosChain,
     mock_pool: Pool,
     mocker,
+    mock_bucket: Bucket,
 ):
     raw = raws[0]
     if raw and raw.chain_id:
@@ -220,7 +241,7 @@ async def test_db_max_height(
             await drop_tables(conn, mock_schema)
             await create_tables(conn, mock_schema)
 
-        assert True == await upsert_data(mock_pool, raw)
+        assert True == await upsert_data(mock_pool, raw, mock_bucket)
 
         mock_chain.chain_id = raw.chain_id
         async with mock_pool.acquire() as conn:
@@ -236,3 +257,25 @@ async def test_no_db_max_height(
 
     async with mock_pool.acquire() as conn:
         assert 0 == await get_max_height(conn, mock_chain)
+
+
+def test_insert_block_into_gcs(raws: List[Raw], mock_bucket: Bucket):
+    blob = mock_bucket.blob("test")
+    raw = raws[0]
+    if raw.raw_block:
+        assert True == insert_json_into_gcs(blob, raw.raw_block)
+
+    res_blob = mock_bucket.get_blob("test")
+    if res_blob:
+        assert json.dumps(raw.raw_block) == res_blob.download_as_bytes().decode("utf-8")
+        res_blob.delete()
+
+
+def test_insert_block_into_gcs_error(raws: List[Raw], mock_bucket: Bucket, mocker):
+    blob = mock_bucket.blob("test")
+    mocker.patch(
+        "google.cloud.storage.blob.Blob.upload_from_string", side_effect=Exception
+    )
+    raw = raws[0]
+    if raw.raw_block:
+        assert False == insert_json_into_gcs(blob, raw.raw_block)

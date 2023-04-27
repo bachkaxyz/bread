@@ -1,4 +1,10 @@
-from dagster import ScheduleDefinition, define_asset_job, AssetSelection
+from dagster import (
+    ScheduleDefinition,
+    define_asset_job,
+    AssetSelection,
+    job,
+    define_op_job,
+)
 
 from dags.assets import DBT_ASSETS, DBT_KEY
 
@@ -20,5 +26,6 @@ current_price_job = define_asset_job(
 current_price_job_schedule = ScheduleDefinition(
     job=current_price_job, cron_schedule="* * * * *"
 )
+
 ALL_JOBS.append(current_price_job)
 ALL_SCHEDULES.append(current_price_job_schedule)

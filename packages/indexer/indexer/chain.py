@@ -1,7 +1,8 @@
 import json, traceback
+import time
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, TypedDict
 from aiohttp import ClientResponse, ClientSession
 from indexer.exceptions import APIResponseError
 import logging
@@ -10,11 +11,16 @@ ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"
 
 
-Api = Dict[str, int]
+class Api(TypedDict):
+    hit: int
+    miss: int
+    times: List[float]
+
+
 Apis = Dict[str, Api]
 
 
-async def is_valid_response(resp: ClientResponse) -> bool:
+async def is_valid_response(r, resp: ClientResponse) -> bool:
     """Check if the response is in the correct format
 
     Args:
@@ -26,19 +32,24 @@ async def is_valid_response(resp: ClientResponse) -> bool:
     # could we return specific error messages here to save to db?
     try:
         return (
-            list((await get_json(resp)).keys()) != ["code", "message", "details"]
+            list(json.loads(r).keys()) != ["code", "message", "details"]
             and resp.status == 200
         )
     except Exception as e:
         return False
 
 
-async def get_json(resp: ClientResponse) -> dict:
-    return json.loads(await resp.read())
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super().__call__(*args, **kwargs)
+        return cls._instances[cls]
 
 
 @dataclass
-class CosmosChain:
+class CosmosChain(metaclass=Singleton):
     chain_id: str
     blocks_endpoint: str
     txs_endpoint: str
@@ -50,17 +61,24 @@ class CosmosChain:
 
     def get_next_api(self) -> str:
         """Get the next api to hit"""
+        print(len(self.apis), self.current_api_index)
+        if len(self.apis) == 1:
+            return list(self.apis.keys())[0]
         return list(self.apis.keys())[self.current_api_index]
 
-    def add_api_miss(self, api: str):
+    def add_api_miss(self, api: str, start_time: float, end_time: float):
         """Add a miss to the api"""
         index = list(self.apis.keys()).index(api)
-        list(self.apis.values())[index]["miss"] += 1
+        value = list(self.apis.values())[index]
+        value["miss"] += 1
+        value["times"].append(end_time - start_time)
 
-    def add_api_hit(self, api: str):
+    def add_api_hit(self, api: str, start_time: float, end_time: float):
         """Add a hit to the api"""
         index = list(self.apis.keys()).index(api)
-        list(self.apis.values())[index]["hit"] += 1
+        value = list(self.apis.values())[index]
+        value["hit"] += 1
+        value["times"].append(end_time - start_time)
 
     def iterate_api(self):
         """Iterate the current api index"""
@@ -77,6 +95,24 @@ class CosmosChain:
         except KeyError:
             # if api is not in list of apis, do nothing
             pass
+
+    def get_api_usage(self):
+        """Save the api usage to a file"""
+
+        return [
+            {
+                "api": s_api,
+                "hit": api["hit"],
+                "miss": api["miss"],
+                "average_time_per_call": sum(api["times"]) / len(api["times"]),
+                "total_time": sum(api["times"]),
+                "total_calls": api["hit"] + api["miss"],
+                "hit_rate": api["hit"] / (api["hit"] + api["miss"]),
+                "miss_rate": api["miss"] / (api["hit"] + api["miss"]),
+            }
+            for s_api, api in self.apis.items()
+            if len(api["times"]) > 0
+        ]
 
     async def _get(
         self,
@@ -102,20 +138,23 @@ class CosmosChain:
 
         while retries < max_retries:
             cur_api = self.get_next_api()
+            start_time = time.time()
             try:
                 async with session.get(f"{cur_api}{endpoint}") as resp:
-                    if await is_valid_response(resp):
-                        self.add_api_hit(cur_api)
-                        return cur_api, await get_json(resp)
+                    r = await resp.read()
+                    if await is_valid_response(r, resp):
+                        end_time = time.time()
+                        self.add_api_hit(cur_api, start_time, end_time)
+                        return cur_api, json.loads(r)
                     else:
                         raise APIResponseError("API Response Not Valid")
             except BaseException as e:
+                end_time = time.time()
                 logger = logging.getLogger("indexer")
                 logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
 
-                self.add_api_miss(cur_api)
+                self.add_api_miss(cur_api, start_time, end_time)
                 self.iterate_api()
-
             retries += 1
         return None, None
 
@@ -197,7 +236,7 @@ async def query_chain_registry(session: ClientSession, chain_registry_name: str)
     async with session.get(
         url=f"https://raw.githubusercontent.com/cosmos/chain-registry/master/{chain_registry_name}/chain.json"
     ) as raw:
-        return await get_json(raw)
+        return json.loads(await raw.read())
 
 
 async def get_chain_registry_info(
@@ -255,7 +294,7 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, Apis]:
         raise EnvironmentError(
             "No APIS. Either provide your own apis through APIS or turn LOAD_CHAIN_REGISTRY_APIS to True"
         )
-    formatted_apis = {api: {"hit": 0, "miss": 0} for api in apis}
+    formatted_apis = {api: Api({"hit": 0, "miss": 0, "times": []}) for api in apis}
     return chain_id, formatted_apis
 
 
@@ -266,7 +305,7 @@ async def remove_bad_apis(
     for i, (api, hit_miss) in enumerate(apis.items()):
         try:
             async with session.get(f"{api}{blocks_endpoint.format('latest')}") as res:
-                j = await get_json(res)
+                j = json.loads(await res.read())
                 api_heights.append((api, hit_miss, int(j["block"]["header"]["height"])))
         except Exception as e:
             logger = logging.getLogger("indexer")
