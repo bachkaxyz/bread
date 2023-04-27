@@ -15,13 +15,13 @@ from indexer.db import (
 )
 from indexer.parser import Raw, process_tx, process_block
 import logging
+from google.cloud.storage import Bucket
 
 min_block_height = 116001
 
 
 async def run_and_upsert_tasks(
-    raw_tasks: List[Task[Raw | None]],
-    pool: Pool,
+    raw_tasks: List[Task[Raw | None]], pool: Pool, bucket: Bucket
 ):
     """Processing a list of coroutines and upserting the results  into the database.
 
@@ -33,7 +33,7 @@ async def run_and_upsert_tasks(
     for task in asyncio.as_completed(raw_tasks):
         raw = await task
         if raw:
-            upsert_tasks.append(asyncio.create_task(upsert_data(pool, raw)))
+            upsert_tasks.append(asyncio.create_task(upsert_data(pool, raw, bucket)))
 
     await asyncio.gather(*upsert_tasks)
 
@@ -42,7 +42,9 @@ while_times = []
 hun_times = []
 
 
-async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
+async def backfill(
+    session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket
+):
     global while_times, hun_times
     """Backfilling the database with historical data.
 
@@ -73,7 +75,7 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
 
                 raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
 
-            await run_and_upsert_tasks(raw_tasks, pool)
+            await run_and_upsert_tasks(raw_tasks, pool, bucket)
 
             # check for missing blocks
             async for (height, dif) in missing_blocks_cursor(cursor_conn, chain):
@@ -124,7 +126,7 @@ async def backfill(session: ClientSession, chain: CosmosChain, pool: Pool):
                         for h in range(current_height, query_lower_bound, -1)
                     ]
 
-                    await run_and_upsert_tasks(tasks, pool)
+                    await run_and_upsert_tasks(tasks, pool, bucket)
 
                     logger.info("backfill - data upserted")
                     while_end_time = time.time()

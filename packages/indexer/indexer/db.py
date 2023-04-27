@@ -4,21 +4,14 @@ import json
 import os
 import time
 import traceback
+from typing import Any, Coroutine, List
 from aiohttp import ClientSession
 from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
 from indexer.exceptions import ChainDataIsNoneError
 from indexer.parser import Raw
 import logging
-from google.cloud import storage
 from google.cloud.storage import Blob, Client, Bucket
-import aiofiles
-from aiofiles import os as aos
-
-# bucket config
-BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
-storage_client = storage.Client()
-bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
 
 # timing
 blob_upload_times = []
@@ -81,23 +74,23 @@ async def create_tables(conn: Connection, schema: str):
         await conn.execute(f.read().replace("$schema", schema))
 
 
-async def upsert_data(pool: Pool, raw: Raw):
-    loop = asyncio.get_event_loop()
-    await asyncio.gather(
-        upsert_data_to_db(pool, raw),
-        loop.run_in_executor(
-            None,
-            insert_json_into_gcs,
-            bucket.blob(f"{raw.chain_id}/blocks/{raw.height}.json"),
-            raw.raw_block,
-        ),
-        loop.run_in_executor(
-            None,
-            insert_json_into_gcs,
-            bucket.blob(f"{raw.chain_id}/txs/{raw.height}.json"),
-            raw.raw_tx,
-        ),
-    )
+async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket):
+    # loop = asyncio.get_event_loop()
+    tasks: List[Coroutine[Any, Any, bool]] = [upsert_data_to_db(pool, raw)]
+    if raw.height and raw.raw_block:
+        # tasks.append(
+        await run_insert_into_gcs(
+            bucket, f"{raw.chain_id}/blocks/{raw.height}.json", raw.raw_block
+        )
+        # )
+    if raw.height and raw.raw_tx:
+        tasks.append(
+            run_insert_into_gcs(
+                bucket, f"{raw.chain_id}/txs/{raw.height}.json", raw.raw_tx
+            )
+        )
+    results = await asyncio.gather(*tasks)
+    return all(results)
 
 
 async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
@@ -122,14 +115,12 @@ async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
                 # we do all the upserts in a transaction so that if one fails, all of them fail
                 await insert_raw(conn, raw)
 
-                tasks = [
-                    insert_many_txs(conn, raw),
-                ]
+                tasks = []
                 # we are checking if the block is not None because we might only have the tx data and not the block data
                 if raw.block is not None:
-                    logger.info(f"raw block height {raw.block.height}")
                     tasks.append(insert_block(conn2, raw))
-
+                if raw.txs:
+                    tasks.append(insert_many_txs(conn, raw))
                 await asyncio.gather(*tasks)
 
                 await asyncio.gather(
@@ -159,22 +150,33 @@ async def insert_raw(conn: Connection, raw: Raw):
     )
 
 
-def insert_json_into_gcs(blob: Blob, data: dict | list):
+async def run_insert_into_gcs(
+    bucket: Bucket, blob_url: str, data: dict | list, max_retries: int = 5
+) -> bool:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None, insert_json_into_gcs, bucket.blob(blob_url), data, max_retries
+    )
+
+
+def insert_json_into_gcs(blob: Blob, data: dict | list, max_retries: int = 5) -> bool:
     global blob_upload_times
     start_time = time.time()
-    while True:
+    retries = 0
+    while retries < max_retries:
         try:
             blob.upload_from_string(json.dumps(data))
-            break
+            finish_time = time.time()
+            blob_upload_times.append(finish_time - start_time)
+            return True
         except Exception as e:
             logger = logging.getLogger("indexer")
             logger.error(
                 f"blob upload failed, retrying in 1 second {traceback.format_exc()}"
             )
             time.sleep(1)
-
-    finish_time = time.time()
-    blob_upload_times.append(finish_time - start_time)
+        retries += 1
+    return False
 
 
 async def insert_block(conn: Connection, raw: Raw):

@@ -5,12 +5,13 @@ from indexer.db import upsert_data, get_max_height
 from indexer.parser import Raw
 from indexer.parser import process_block
 import logging
+from google.cloud.storage import Bucket
 
 # this is outside of live so that it can be accessed by the live function on every iteration
 current_height = 0
 
 
-async def live(session: ClientSession, chain: CosmosChain, pool: Pool):
+async def live(session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket):
     """Pull live data from the chain and upsert it into the database.
 
     Args:
@@ -35,7 +36,7 @@ async def live(session: ClientSession, chain: CosmosChain, pool: Pool):
     if raw and raw.height and raw.height > current_height:
         current_height = raw.height
         logger.info(f"live - upserting new height {raw.height=}")
-        await upsert_data(pool, raw)
+        await upsert_data(pool, raw, bucket)
     logger.info("live - upserting finished")
 
 

@@ -12,6 +12,7 @@ from indexer.backfill import backfill
 from indexer.chain import get_chain_from_environment, CosmosChain
 from indexer.db import create_tables, drop_tables
 from indexer.live import live
+from google.cloud.storage import Client, Bucket
 
 from logging import Logger
 
@@ -20,7 +21,8 @@ async def run(
     pool: Pool,
     session: ClientSession,
     chain: CosmosChain,
-    f: Callable[[ClientSession, CosmosChain, Pool], Coroutine],
+    bucket: Bucket,
+    f: Callable[[ClientSession, CosmosChain, Pool, Bucket], Coroutine],
 ):
     """
     The entry point of each process (live and backfill). This function controls the while loop that runs each portion of the indexer.
@@ -32,7 +34,7 @@ async def run(
         f (Callable[[ClientSession, CosmosChain, Pool], Coroutine]): The function to run on each iteration of the loop
     """
     while True:
-        await f(session, chain, pool)
+        await f(session, chain, pool, bucket)
         await asyncio.sleep(chain.time_between_blocks)
 
 
@@ -82,9 +84,13 @@ async def main():
 
             # start indexer
             chain = await get_chain_from_environment(session)
+            BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
+            storage_client = Client()
+            bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
+
             await asyncio.gather(
-                run(pool, session, chain, live),
-                run(pool, session, chain, backfill),
+                run(pool, session, chain, bucket, live),
+                run(pool, session, chain, bucket, backfill),
             )
 
 
