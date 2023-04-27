@@ -1,6 +1,7 @@
 import os
 from dagster_dbt import dbt_cli_resource
 from dagster import file_relative_path
+from dagster_gcp.gcs import gcs_resource, gcs_pickle_io_manager, gcs_file_manager
 from dags.resources.postgres_io_manager import DbIOManager
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
@@ -32,4 +33,26 @@ POSTGRES_CON_STRING = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGR
 
 postgres_resource = DbIOManager(con_string=POSTGRES_CON_STRING, schema=JOB_SCHEMA)
 
-RESOURCES = {"dbt": dbt_resource, "postgres": postgres_resource}
+
+gcs = gcs_resource.configured(
+    {
+        "project": os.environ["GCP_PROJECT_ID"],
+    }
+)
+
+gcs_io_manager = gcs_pickle_io_manager.configured(
+    {"gcs_bucket": os.environ["BUCKET_NAME"], "gcs_prefix": os.environ["CHAIN_ID"]}
+)
+
+gcs_fm = gcs_file_manager.configured(
+    {"gcs_bucket": os.environ["BUCKET_NAME"], "gcs_prefix": os.environ["CHAIN_ID"]}
+)
+
+
+ALL_RESOURCES = {
+    "dbt": dbt_resource,
+    "postgres": postgres_resource,
+    "gcs": gcs,
+    "gcs_fm": gcs_fm,
+    "gcs_io_manager": gcs_io_manager,
+}
