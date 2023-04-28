@@ -35,7 +35,12 @@ async def run(
         f (Callable[[ClientSession, CosmosChain, Pool], Coroutine]): The function to run on each iteration of the loop
     """
     while True:
-        await f(session, chain, pool, bucket)
+        try:
+            await f(session, chain, pool, bucket)
+        except Exception as e:
+            logger = logging.getLogger("indexer")
+            logger.error(f"function error Exception in {f.__name__}: {e}")
+            logger.error(traceback.format_exc())
         await asyncio.sleep(chain.time_between_blocks)
 
 
