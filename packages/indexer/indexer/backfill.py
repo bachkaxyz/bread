@@ -61,7 +61,7 @@ async def backfill(
         # we are using transactions here since a cursor is used
         async with cursor_conn.transaction():
             raw_tasks = []
-            check for wrong tx counts (where the tx count in the block header does not match the number of txs in the block)
+            # check for wrong tx counts (where the tx count in the block header does not match the number of txs in the block)
             async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
                 cursor_conn, chain
             ):
