@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple, TypedDict
 from aiohttp import ClientResponse, ClientSession
 from indexer.exceptions import APIResponseError
 import logging
+from aiohttp.client_exceptions import ClientError
 
 ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"
@@ -147,7 +148,7 @@ class CosmosChain(metaclass=Singleton):
                         return cur_api, json.loads(r)
                     else:
                         raise APIResponseError("API Response Not Valid")
-            except BaseException as e:
+            except BaseException or Exception or ClientError as e:
                 end_time = time.time()
                 logger = logging.getLogger("indexer")
                 logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
