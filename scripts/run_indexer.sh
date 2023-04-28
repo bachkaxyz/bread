@@ -15,7 +15,8 @@ if [ "$GOOGLE_APPLICATION_CREDENTIALS" == "" ]; then
 fi;
 
 cd ./packages/indexer;
-rm creds.json
+rm creds.json;
+rm indexer.log; 
 
 if [ "$ENVIRONMENT" == ""]; then
   echo "please set ENVIRONMENT to either 'production' or 'development' in root .env";
