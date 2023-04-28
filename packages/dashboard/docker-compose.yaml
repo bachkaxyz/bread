@@ -12,7 +12,7 @@ services:
       - .env
       - ./../../.env
     volumes:
-      - ./dashboard:/dashboard
+      - .:/dashboard
 networks:
   default:
     name: sn-mono-network

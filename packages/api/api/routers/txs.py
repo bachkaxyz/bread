@@ -21,7 +21,7 @@ async def get_cumulative_txs():
 @router.get("/daily")
 async def daily_txs():
     return await database.fetch_all(
-        """
+        f"""
         select *
         from {DBT_SCHEMA}.num_txs_per_day
         """
