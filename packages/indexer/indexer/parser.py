@@ -352,7 +352,7 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
             if raw.block_tx_count == raw.tx_responses_tx_count:
                 return raw
             else:
-                logger.info("process - tx count not right")
+                logger.info(f"process - {raw.height} - tx count not right")
                 return Raw(
                     height=raw.height,
                     chain_id=raw.chain_id,
@@ -363,7 +363,9 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
                 )
 
         else:
-            logger.info("process - tx_response is not a key or tx_res_json is none")
+            logger.info(
+                f"process - {raw.height} - tx_response is not a key or tx_res_json is none"
+            )
             return Raw(
                 height=raw.height,
                 chain_id=raw.chain_id,
@@ -374,7 +376,7 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
             )
     else:
         logger.info(
-            "process - raw.height or raw.block_tx_count does not exist so cannot parse txs"
+            f"process - {raw.height} - raw.height or raw.block_tx_count does not exist so cannot parse txs"
         )
         return raw
 
