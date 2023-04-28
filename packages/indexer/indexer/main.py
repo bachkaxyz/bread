@@ -98,6 +98,7 @@ async def main():
                 run(pool, session, chain, bucket, backfill),
             )
             for e in exceptions:
+                logging.error("Exception in main loop")
                 logging.error(e)
                 logging.error(traceback.format_exc())
 
