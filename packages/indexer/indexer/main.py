@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import traceback
 from typing import Callable, Coroutine
 from aiohttp import ClientSession, ClientTimeout
 
@@ -99,7 +100,7 @@ async def main():
             )
             for e in exceptions:
                 if e is not None:
-                    logging.error(e)
+                    logging.error(traceback.format_exc())
 
 
 if __name__ == "__main__":
