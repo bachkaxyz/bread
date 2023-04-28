@@ -62,24 +62,24 @@ async def backfill(
         async with cursor_conn.transaction():
             raw_tasks = []
             # check for wrong tx counts (where the tx count in the block header does not match the number of txs in the block)
-            async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
-                cursor_conn, chain
-            ):
-                logger.info(f"backfill - wrong tx count for {height}, {block_tx_count}")
-                raw = Raw(
-                    height=height,
-                    block_tx_count=block_tx_count,
-                    chain_id=chain_id,
-                )
-                # since the block has already been processed, we can just process the txs
+            # async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
+            #     cursor_conn, chain
+            # ):
+            #     logger.info(f"backfill - wrong tx count for {height}, {block_tx_count}")
+            #     raw = Raw(
+            #         height=height,
+            #         block_tx_count=block_tx_count,
+            #         chain_id=chain_id,
+            #     )
+            #     # since the block has already been processed, we can just process the txs
 
-                raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
+            #     raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
 
-                if len(raw_tasks) > 20:
-                    await run_and_upsert_tasks(raw_tasks, pool, bucket)
-                    raw_tasks = []
+            #     if len(raw_tasks) > 20:
+            #         await run_and_upsert_tasks(raw_tasks, pool, bucket)
+            #         raw_tasks = []
 
-            await run_and_upsert_tasks(raw_tasks, pool, bucket)
+            # await run_and_upsert_tasks(raw_tasks, pool, bucket)
 
             # check for missing blocks
             async for (height, dif) in missing_blocks_cursor(cursor_conn, chain):
