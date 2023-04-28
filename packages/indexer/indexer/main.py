@@ -96,11 +96,10 @@ async def main():
             exceptions = await asyncio.gather(
                 run(pool, session, chain, bucket, live),
                 run(pool, session, chain, bucket, backfill),
-                return_exceptions=True,
             )
             for e in exceptions:
-                if e is not None:
-                    logging.error(traceback.format_exc())
+                logging.error(e)
+                logging.error(traceback.format_exc())
 
 
 if __name__ == "__main__":
