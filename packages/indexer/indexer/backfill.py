@@ -75,6 +75,10 @@ async def backfill(
 
                 raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
 
+                if len(raw_tasks) > 20:
+                    await run_and_upsert_tasks(raw_tasks, pool, bucket)
+                    raw_tasks = []
+
             await run_and_upsert_tasks(raw_tasks, pool, bucket)
 
             # check for missing blocks
