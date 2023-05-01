@@ -74,19 +74,23 @@ async def create_tables(conn: Connection, schema: str):
         await conn.execute(f.read().replace("$schema", schema))
 
 
-async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket):
+async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket, chain: CosmosChain):
     # loop = asyncio.get_event_loop()
     tasks: List[Coroutine[Any, Any, bool]] = [upsert_data_to_db(pool, raw)]
     if raw.height and raw.raw_block:
         # tasks.append(
         await run_insert_into_gcs(
-            bucket, f"{raw.chain_id}/blocks/{raw.height}.json", raw.raw_block
+            bucket,
+            f"{chain.chain_registry_name}/{raw.chain_id}/blocks/{raw.height}.json",
+            raw.raw_block,
         )
         # )
     if raw.height and raw.raw_tx:
         tasks.append(
             run_insert_into_gcs(
-                bucket, f"{raw.chain_id}/txs/{raw.height}.json", raw.raw_tx
+                bucket,
+                f"{chain.chain_registry_name}/{raw.chain_id}/txs/{raw.height}.json",
+                raw.raw_tx,
             )
         )
     results = await asyncio.gather(*tasks)
