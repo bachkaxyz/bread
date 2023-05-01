@@ -190,7 +190,7 @@ class Raw:
     raw_tx: List[dict] | None = None
 
     block_tx_count: int = 0
-    tx_responses_tx_count: int = 0
+    tx_responses_tx_count: int | None = 0
 
     block: Block | None = None
     txs: List[Tx] = field(default_factory=list)
@@ -396,14 +396,23 @@ async def process_block(
     """
     raw = Raw()
     raw.parse_block(block_raw_data)
-    if raw.block and raw.height and raw.block_tx_count > 0:
-        return await process_tx(raw, session, chain)
-    else:
+    if raw.block is not None:
         return Raw(
             height=raw.height,
             chain_id=raw.chain_id,
             block_tx_count=raw.block_tx_count,
-            tx_responses_tx_count=0,
+            tx_responses_tx_count=None,
             block=raw.block,
             raw_block=raw.raw_block,
         )
+    if raw.height and raw.block_tx_count > 0:
+        return await process_tx(raw, session, chain)
+
+    return Raw(
+        height=raw.height,
+        chain_id=raw.chain_id,
+        block_tx_count=raw.block_tx_count,
+        tx_responses_tx_count=None,
+        block=raw.block,
+        raw_block=raw.raw_block,
+    )

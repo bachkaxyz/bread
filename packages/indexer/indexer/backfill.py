@@ -42,7 +42,37 @@ while_times = []
 hun_times = []
 
 
-async def backfill(
+async def backfill_wrong_count(
+    session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket
+):
+    logger = logging.getLogger("indexer")
+    logger.info("backfill - starting backfill")
+    async with pool.acquire() as cursor_conn:
+        cursor_conn: Connection
+
+        # we are using transactions here since a cursor is used
+        async with cursor_conn.transaction():
+            raw_tasks = []
+            # check for wrong tx counts (where the tx count in the block header does not match the number of txs in the block)
+            async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
+                cursor_conn, chain
+            ):
+                logger.info(f"backfill - wrong tx count for {height}, {block_tx_count}")
+                raw = Raw(
+                    height=height,
+                    block_tx_count=block_tx_count,
+                    chain_id=chain_id,
+                )
+                # since the block has already been processed, we can just process the txs
+
+                raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
+
+                if len(raw_tasks) > 20:
+                    await run_and_upsert_tasks(raw_tasks, pool, bucket)
+                    raw_tasks = []
+
+
+async def backfill_historical(
     session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket
 ):
     global while_times, hun_times
@@ -60,27 +90,6 @@ async def backfill(
 
         # we are using transactions here since a cursor is used
         async with cursor_conn.transaction():
-            raw_tasks = []
-            # check for wrong tx counts (where the tx count in the block header does not match the number of txs in the block)
-            # async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
-            #     cursor_conn, chain
-            # ):
-            #     logger.info(f"backfill - wrong tx count for {height}, {block_tx_count}")
-            #     raw = Raw(
-            #         height=height,
-            #         block_tx_count=block_tx_count,
-            #         chain_id=chain_id,
-            #     )
-            #     # since the block has already been processed, we can just process the txs
-
-            #     raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
-
-            #     if len(raw_tasks) > 20:
-            #         await run_and_upsert_tasks(raw_tasks, pool, bucket)
-            #         raw_tasks = []
-
-            # await run_and_upsert_tasks(raw_tasks, pool, bucket)
-
             # check for missing blocks
             async for (height, dif) in missing_blocks_cursor(cursor_conn, chain):
                 logger.info(f"backfill - missing block {height=} {dif=}")
