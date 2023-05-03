@@ -38,7 +38,7 @@ elif [ "$ENVIRONMENT" == "testing" ]; then
     DOCKER_BUILDKIT=0 docker compose -f docker-compose.tests.yaml build;
     docker compose -f docker-compose.tests.yaml up --abort-on-container-exit;
 else
-  echo please set ENVIRONMENT to either 'production' or 'development' in root .env;
+  echo please set ENVIRONMENT to either 'production', 'development' or 'testing' in root .env;
   exit 0;
 fi
 

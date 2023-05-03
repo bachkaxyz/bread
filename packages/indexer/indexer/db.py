@@ -46,9 +46,9 @@ async def wrong_tx_count_cursor(conn: Connection, chain: CosmosChain):
     """
     async for record in conn.cursor(
         """
-        select height, block_tx_count, chain_id
+         select height, block_tx_count, chain_id
         from raw
-        where tx_tx_count <> block_tx_count and chain_id = $1
+        where (tx_tx_count <> block_tx_count or tx_tx_count is null or block_tx_count is null) and chain_id = $1
         """,
         chain.chain_id,
     ):
@@ -142,7 +142,6 @@ async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
 
 
 async def insert_raw(conn: Connection, raw: Raw):
-    loop = asyncio.get_event_loop()
     await conn.execute(
         f"""
                         INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)

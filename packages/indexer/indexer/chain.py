@@ -272,25 +272,21 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, str, Apis]:
         Tuple[str, str, APIS]: Chain ID, Chain Registry Name, Apis
     """
     chain_registry_name = os.getenv("CHAIN_REGISTRY_NAME", None)
-    if chain_registry_name is None:
+    if chain_registry_name is None and not chain_registry_name:
         raise EnvironmentError(
             "CHAIN_REGISTRY_NAME environment variable not provided. This is needed to load the correct chain_id"
         )
     load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", "True").upper() == "TRUE"
     logger = logging.getLogger("indexer")
     apis = set()  # don't add duplicate apis
-    if chain_registry_name:
-        chain_id, chain_registry_apis = await get_chain_registry_info(
-            session, chain_registry_name
-        )
-        logger.info(load_external_apis)
-        if load_external_apis:
-            logger.info("added external")
-            [apis.add(api) for api in chain_registry_apis]
-    else:
-        raise EnvironmentError(
-            "CHAIN_REGISTRY_NAME environment variable not provided. This is needed to load the correct chain_id"
-        )
+    chain_id, chain_registry_apis = await get_chain_registry_info(
+        session, chain_registry_name
+    )
+    logger.info(load_external_apis)
+    if load_external_apis:
+        logger.info("added external")
+        [apis.add(api) for api in chain_registry_apis]
+
     env_apis = os.getenv("APIS", "")
     if env_apis != "":
         [apis.add(api) for api in env_apis.split(",")]
@@ -361,6 +357,7 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
         time_between = int(time_between)
         batch_size = int(batch_size)
         step_size = int(step_size)
+        print(time_between, batch_size, step_size)
     except BaseException as e:
         raise EnvironmentError(
             "Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int"
