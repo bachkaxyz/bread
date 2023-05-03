@@ -36,7 +36,7 @@ async def live(session: ClientSession, chain: CosmosChain, pool: Pool, bucket: B
     if raw and raw.height and raw.height > current_height:
         current_height = raw.height
         logger.info(f"live - upserting new height {raw.height=}")
-        await upsert_data(pool, raw, bucket)
+        await upsert_data(pool, raw, bucket, chain)
     logger.info("live - upserting finished")
 
 

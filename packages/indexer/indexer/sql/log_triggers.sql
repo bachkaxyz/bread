@@ -5,10 +5,6 @@ as
     DECLARE
         column_name TEXT;
         unparsed_columns JSONB;
-        kv_logs cursor(column_name TEXT) for 
-            select key, value, txhash, msg_index
-            from $schema.logs, jsonb_each_text(parsed)
-            where key = column_name;
     BEGIN
         column_name := NEW.event || '_' || NEW.attribute;
         IF NEW.parse = TRUE THEN

@@ -3,7 +3,6 @@ from dagster import (
     define_asset_job,
     AssetSelection,
     job,
-    define_op_job,
 )
 
 from dags.assets import DBT_ASSETS, DBT_KEY

@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple, TypedDict
 from aiohttp import ClientResponse, ClientSession
 from indexer.exceptions import APIResponseError
 import logging
+from aiohttp.client_exceptions import ClientError
 
 ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"
@@ -51,6 +52,7 @@ class Singleton(type):
 @dataclass
 class CosmosChain(metaclass=Singleton):
     chain_id: str
+    chain_registry_name: str
     blocks_endpoint: str
     txs_endpoint: str
     apis: Apis
@@ -61,7 +63,6 @@ class CosmosChain(metaclass=Singleton):
 
     def get_next_api(self) -> str:
         """Get the next api to hit"""
-        print(len(self.apis), self.current_api_index)
         if len(self.apis) == 1:
             return list(self.apis.keys())[0]
         return list(self.apis.keys())[self.current_api_index]
@@ -148,7 +149,7 @@ class CosmosChain(metaclass=Singleton):
                         return cur_api, json.loads(r)
                     else:
                         raise APIResponseError("API Response Not Valid")
-            except BaseException as e:
+            except BaseException or Exception or ClientError as e:
                 end_time = time.time()
                 logger = logging.getLogger("indexer")
                 logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
@@ -258,7 +259,7 @@ async def get_chain_registry_info(
     return chain_id, apis
 
 
-async def get_chain_info(session: ClientSession) -> Tuple[str, Apis]:
+async def get_chain_info(session: ClientSession) -> Tuple[str, str, Apis]:
     """Get chain info from environment variables
 
     Args:
@@ -268,24 +269,24 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, Apis]:
         EnvironmentError: If environment variables are not set
 
     Returns:
-        Tuple[str, APIS]: Chain_id, Apis
+        Tuple[str, str, APIS]: Chain ID, Chain Registry Name, Apis
     """
     chain_registry_name = os.getenv("CHAIN_REGISTRY_NAME", None)
-    load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", "True").upper() == "TRUE"
-    logger = logging.getLogger("indexer")
-    apis = set()  # don't add duplicate apis
-    if chain_registry_name:
-        chain_id, chain_registry_apis = await get_chain_registry_info(
-            session, chain_registry_name
-        )
-        logger.info(load_external_apis)
-        if load_external_apis:
-            logger.info("added external")
-            [apis.add(api) for api in chain_registry_apis]
-    else:
+    if chain_registry_name is None and not chain_registry_name:
         raise EnvironmentError(
             "CHAIN_REGISTRY_NAME environment variable not provided. This is needed to load the correct chain_id"
         )
+    load_external_apis = os.getenv("LOAD_CHAIN_REGISTRY_APIS", "True").upper() == "TRUE"
+    logger = logging.getLogger("indexer")
+    apis = set()  # don't add duplicate apis
+    chain_id, chain_registry_apis = await get_chain_registry_info(
+        session, chain_registry_name
+    )
+    logger.info(load_external_apis)
+    if load_external_apis:
+        logger.info("added external")
+        [apis.add(api) for api in chain_registry_apis]
+
     env_apis = os.getenv("APIS", "")
     if env_apis != "":
         [apis.add(api) for api in env_apis.split(",")]
@@ -295,7 +296,7 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, Apis]:
             "No APIS. Either provide your own apis through APIS or turn LOAD_CHAIN_REGISTRY_APIS to True"
         )
     formatted_apis = {api: Api({"hit": 0, "miss": 0, "times": []}) for api in apis}
-    return chain_id, formatted_apis
+    return chain_id, chain_registry_name, formatted_apis
 
 
 async def remove_bad_apis(
@@ -339,7 +340,7 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
     Returns:
         CosmosChain: CosmosChain object configured from current environment
     """
-    chain_id, apis = await get_chain_info(session)
+    chain_id, chain_registry_name, apis = await get_chain_info(session)
     time_between = os.getenv("TIME_BETWEEN_BLOCKS", "1")
     batch_size = os.getenv("BATCH_SIZE", "20")
     step_size = os.getenv("STEP_SIZE", "10")
@@ -356,12 +357,14 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
         time_between = int(time_between)
         batch_size = int(batch_size)
         step_size = int(step_size)
+        print(time_between, batch_size, step_size)
     except BaseException as e:
         raise EnvironmentError(
             "Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int"
         )
     chain = CosmosChain(
         chain_id=chain_id,
+        chain_registry_name=chain_registry_name,
         blocks_endpoint=blocks_endpoint,
         txs_endpoint=txs_endpoint,
         apis=apis,

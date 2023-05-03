@@ -3,11 +3,12 @@ import io
 import json
 import logging
 import os
+import traceback
 from typing import Callable, Coroutine
 from aiohttp import ClientSession, ClientTimeout
 
 from asyncpg import Pool, create_pool
-from indexer.backfill import backfill
+from indexer.backfill import backfill_historical, backfill_wrong_count
 
 from indexer.chain import get_chain_from_environment, CosmosChain
 from indexer.db import create_tables, drop_tables
@@ -34,7 +35,12 @@ async def run(
         f (Callable[[ClientSession, CosmosChain, Pool], Coroutine]): The function to run on each iteration of the loop
     """
     while True:
-        await f(session, chain, pool, bucket)
+        try:
+            await f(session, chain, pool, bucket)
+        except Exception as e:
+            logger = logging.getLogger("indexer")
+            logger.error(f"function error Exception in {f.__name__}: {e}")
+            logger.error(traceback.format_exc())
         await asyncio.sleep(chain.time_between_blocks)
 
 
@@ -76,11 +82,15 @@ async def main():
             # manage tables on startup if needed
             async with pool.acquire() as conn:
                 DROP_TABLES_ON_STARTUP = (
-                    os.getenv("DROP_TABLES_ON_STARTUP", "True").upper() == "TRUE"
+                    os.getenv("DROP_TABLES_ON_STARTUP", "False").upper() == "TRUE"
+                )
+                CREATE_TABLES_ON_STARTUP = (
+                    os.getenv("CREATE_TABLES_ON_STARTUP", "false").upper() == "TRUE"
                 )
                 if DROP_TABLES_ON_STARTUP:
                     await drop_tables(conn, schema_name)
-                await create_tables(conn, schema_name)
+                if CREATE_TABLES_ON_STARTUP:
+                    await create_tables(conn, schema_name)
 
             # start indexer
             chain = await get_chain_from_environment(session)
@@ -88,10 +98,15 @@ async def main():
             storage_client = Client()
             bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
 
-            await asyncio.gather(
+            exceptions = await asyncio.gather(
                 run(pool, session, chain, bucket, live),
-                run(pool, session, chain, bucket, backfill),
+                run(pool, session, chain, bucket, backfill_historical),
+                run(pool, session, chain, bucket, backfill_wrong_count),
             )
+            for e in exceptions:
+                logging.error("Exception in main loop")
+                logging.error(e)
+                logging.error(traceback.format_exc())
 
 
 if __name__ == "__main__":

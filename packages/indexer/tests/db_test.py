@@ -86,7 +86,7 @@ async def test_upsert_data(
         await create_tables(conn, mock_schema)
 
         await asyncio.gather(
-            *[upsert_data(mock_pool, raw, mock_bucket) for raw in raws]
+            *[upsert_data(mock_pool, raw, mock_bucket, mock_chain) for raw in raws]
         )
 
         raw_results = await conn.fetch("select * from raw order by height asc")
@@ -197,7 +197,7 @@ async def test_get_missing_blocks(
         await create_tables(conn, mock_schema)
 
         await asyncio.gather(
-            *[upsert_data(mock_pool, raw, mock_bucket) for raw in raws]
+            *[upsert_data(mock_pool, raw, mock_bucket, mock_chain) for raw in raws]
         )
 
         mock_chain.chain_id = "jackal-1"
@@ -214,12 +214,12 @@ async def test_get_missing_blocks(
 
 
 async def test_invalid_upsert_data(
-    mock_pool: Pool, mock_schema: str, mock_bucket: Bucket
+    mock_pool: Pool, mock_schema: str, mock_bucket: Bucket, mock_chain: CosmosChain
 ):
     async with mock_pool.acquire() as conn:
         await drop_tables(conn, mock_schema)
     raw = Raw()
-    assert False == await upsert_data(mock_pool, raw, mock_bucket)
+    assert False == await upsert_data(mock_pool, raw, mock_bucket, mock_chain)
 
     with pytest.raises(ChainDataIsNoneError):
         async with mock_pool.acquire() as conn:
@@ -241,7 +241,7 @@ async def test_db_max_height(
             await drop_tables(conn, mock_schema)
             await create_tables(conn, mock_schema)
 
-        assert True == await upsert_data(mock_pool, raw, mock_bucket)
+        assert True == await upsert_data(mock_pool, raw, mock_bucket, mock_chain)
 
         mock_chain.chain_id = raw.chain_id
         async with mock_pool.acquire() as conn:

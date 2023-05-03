@@ -2,7 +2,7 @@ version: '3'
 services:
   dagit:
     image: gcr.io/secretnetwork/sn-mono/${GIT_BRANCH}/${GIT_BRANCH}-dagster
-    entrypoint:
+    command:
       - poetry
       - run
       - dagit
@@ -29,7 +29,7 @@ services:
       - $GOOGLE_APPLICATION_CREDENTIALS:/dags/creds.json
   daemon:
     image: gcr.io/secretnetwork/sn-mono/${GIT_BRANCH}/${GIT_BRANCH}-dagster
-    entrypoint:
+    command:
       - poetry
       - run
       - dagster-daemon
