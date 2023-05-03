@@ -33,6 +33,7 @@ def mock_chain(emptyApi: Api):
     }
     chain = CosmosChain(
         chain_id="mock_chain_id",
+        chain_registry_name="mock_chain_registry_name",
         blocks_endpoint="cosmos/blocks/{}",
         txs_endpoint="cosmos/txs/{}",
         apis=apis,
@@ -160,7 +161,7 @@ async def test_chain_environment_fail_no_chain_registry(
 async def test_chain_environment_time_between_blocks_not_int(mock_client):
     os.environ["TIME_BETWEEN_BLOCKS"] = "not a string"
     with pytest.raises(EnvironmentError):
-        assert None == await get_chain_from_environment(mock_client)
+        await get_chain_from_environment(mock_client)
 
     os.environ["TIME_BETWEEN_BLOCKS"] = "1"
 
@@ -205,6 +206,7 @@ async def test_chain_environment_pass(
     async with ClientSession() as session:
         assert await get_chain_from_environment(session) == CosmosChain(
             chain_id="jackal-1",
+            chain_registry_name="jackal",
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={
@@ -231,6 +233,7 @@ async def test_chain_environment_pass(
     async with ClientSession() as session:
         assert await get_chain_from_environment(session) == CosmosChain(
             chain_id="jackal-1",
+            chain_registry_name="jackal",
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={
@@ -249,6 +252,7 @@ async def test_chain_environment_pass(
     async with ClientSession() as session:
         assert await get_chain_from_environment(session) == CosmosChain(
             chain_id="jackal-1",
+            chain_registry_name="jackal",
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={
@@ -269,6 +273,7 @@ async def test_chain_environment_pass(
     async with ClientSession() as session:
         assert await get_chain_from_environment(session) == CosmosChain(
             chain_id="jackal-1",
+            chain_registry_name="jackal",
             blocks_endpoint="/cosmos/base/tendermint/v1beta1/blocks/{}",
             txs_endpoint="/cosmos/tx/v1beta1/txs?events=tx.height={}",
             apis={

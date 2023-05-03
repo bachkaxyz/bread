@@ -8,7 +8,7 @@ from typing import Callable, Coroutine
 from aiohttp import ClientSession, ClientTimeout
 
 from asyncpg import Pool, create_pool
-from indexer.backfill import backfill
+from indexer.backfill import backfill_historical, backfill_wrong_count
 
 from indexer.chain import get_chain_from_environment, CosmosChain
 from indexer.db import create_tables, drop_tables
@@ -100,7 +100,8 @@ async def main():
 
             exceptions = await asyncio.gather(
                 run(pool, session, chain, bucket, live),
-                run(pool, session, chain, bucket, backfill),
+                run(pool, session, chain, bucket, backfill_historical),
+                run(pool, session, chain, bucket, backfill_wrong_count),
             )
             for e in exceptions:
                 logging.error("Exception in main loop")

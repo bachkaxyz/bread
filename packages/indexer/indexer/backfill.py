@@ -21,7 +21,7 @@ min_block_height = 116001
 
 
 async def run_and_upsert_tasks(
-    raw_tasks: List[Task[Raw | None]], pool: Pool, bucket: Bucket
+    raw_tasks: List[Task[Raw | None]], pool: Pool, bucket: Bucket, chain: CosmosChain
 ):
     """Processing a list of coroutines and upserting the results  into the database.
 
@@ -33,7 +33,9 @@ async def run_and_upsert_tasks(
     for task in asyncio.as_completed(raw_tasks):
         raw = await task
         if raw:
-            upsert_tasks.append(asyncio.create_task(upsert_data(pool, raw, bucket)))
+            upsert_tasks.append(
+                asyncio.create_task(upsert_data(pool, raw, bucket, chain))
+            )
 
     await asyncio.gather(*upsert_tasks)
 
@@ -42,7 +44,46 @@ while_times = []
 hun_times = []
 
 
-async def backfill(
+async def backfill_wrong_count(
+    session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket
+):
+    logger = logging.getLogger("indexer")
+    logger.info("backfill - starting backfill")
+    async with pool.acquire() as cursor_conn:
+        cursor_conn: Connection
+
+        # we are using transactions here since a cursor is used
+        async with cursor_conn.transaction():
+            raw_tasks = []
+            # check for wrong tx counts (where the tx count in the block header does not match the number of txs in the block)
+            async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
+                cursor_conn, chain
+            ):
+                logger.info(
+                    f"backfill wrong count - wrong tx count for {height}, {block_tx_count}"
+                )
+                raw = Raw(
+                    height=height,
+                    block_tx_count=block_tx_count,
+                    chain_id=chain_id,
+                )
+                # since the block has already been processed, we can just process the txs
+
+                raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
+
+                if len(raw_tasks) > chain.step_size:
+                    logger.info(
+                        f"backfill wrong count - upserting {len(raw_tasks)} tasks"
+                    )
+                    await run_and_upsert_tasks(raw_tasks, pool, bucket, chain)
+                    raw_tasks = []
+
+            logger.info(f"backfill wrong count - upserting {len(raw_tasks)} tasks")
+            await run_and_upsert_tasks(raw_tasks, pool, bucket, chain)
+    logger.info("backfill wrong count - done")
+
+
+async def backfill_historical(
     session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket
 ):
     global while_times, hun_times
@@ -60,34 +101,13 @@ async def backfill(
 
         # we are using transactions here since a cursor is used
         async with cursor_conn.transaction():
-            raw_tasks = []
-            # check for wrong tx counts (where the tx count in the block header does not match the number of txs in the block)
-            # async for (height, block_tx_count, chain_id) in wrong_tx_count_cursor(
-            #     cursor_conn, chain
-            # ):
-            #     logger.info(f"backfill - wrong tx count for {height}, {block_tx_count}")
-            #     raw = Raw(
-            #         height=height,
-            #         block_tx_count=block_tx_count,
-            #         chain_id=chain_id,
-            #     )
-            #     # since the block has already been processed, we can just process the txs
-
-            #     raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
-
-            #     if len(raw_tasks) > 20:
-            #         await run_and_upsert_tasks(raw_tasks, pool, bucket)
-            #         raw_tasks = []
-
-            # await run_and_upsert_tasks(raw_tasks, pool, bucket)
-
             # check for missing blocks
             async for (height, dif) in missing_blocks_cursor(cursor_conn, chain):
-                logger.info(f"backfill - missing block {height=} {dif=}")
+                logger.info(f"backfill historical - missing block {height=} {dif=}")
 
                 # if dif is -1, then the block is the lowest block in the database
                 if dif == -1:
-                    logger.info("backfill - min block in db reached")
+                    logger.info("backfill historical - min block in db reached")
 
                     # if the lowest block in the database is the min block height, then we are done
                     lowest_height = await chain.get_lowest_height(session)
@@ -100,7 +120,7 @@ async def backfill(
                     else:
                         dif = height - lowest_height
                 logger.info(
-                    f"backfill - after processing state of indexer {height=}, {dif=}"
+                    f"backfill historical - after processing state of indexer {height=}, {dif=}"
                 )
 
                 # we are querying 10 blocks at a time to avoid timeouts
@@ -119,7 +139,7 @@ async def backfill(
                     else:
                         query_lower_bound = min_height
                     logger.info(
-                        f"backfill - querying range {current_height} - {query_lower_bound}"
+                        f"backfill historical - querying range {current_height} - {query_lower_bound}"
                     )
 
                     # query and process the blocks in the range
@@ -130,9 +150,9 @@ async def backfill(
                         for h in range(current_height, query_lower_bound, -1)
                     ]
 
-                    await run_and_upsert_tasks(tasks, pool, bucket)
+                    await run_and_upsert_tasks(tasks, pool, bucket, chain)
 
-                    logger.info("backfill - data upserted")
+                    logger.info("backfill historical - data upserted")
                     while_end_time = time.time()
                     while_times.append(
                         (
@@ -141,7 +161,7 @@ async def backfill(
                         )
                     )
                     logger.debug(
-                        f"backfill - while loop took {while_end_time - while_start_time} seconds"
+                        f"backfill historical - while loop took {while_end_time - while_start_time} seconds"
                     )
                     current_height = query_lower_bound
                     save_analytics(
@@ -154,7 +174,7 @@ async def backfill(
                     hun_times, while_times, blob_upload_times, upsert_times, chain
                 )
 
-    logger.info("backfill - finish backfill task")
+    logger.info("backfill historical - finish backfill task")
 
 
 def save_analytics(

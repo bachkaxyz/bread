@@ -189,8 +189,8 @@ class Raw:
     raw_block: dict | None = None
     raw_tx: List[dict] | None = None
 
-    block_tx_count: int = 0
-    tx_responses_tx_count: int = 0
+    block_tx_count: int | None = None
+    tx_responses_tx_count: int | None = None
 
     block: Block | None = None
     txs: List[Tx] = field(default_factory=list)
@@ -325,7 +325,9 @@ class Raw:
 #     return msgs, msg_cols
 
 
-async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Raw:
+async def process_tx(
+    raw: Raw, session: ClientSession, chain: CosmosChain
+) -> Raw | None:
     """Query and process transactions from raw block
 
     Args:
@@ -338,26 +340,32 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
     """
     logger = logging.getLogger("indexer")
     # these are the fields required to process transactions
-    if raw.height is not None and raw.block_tx_count != 0:
+    if raw.height is not None and raw.block_tx_count is not None:
         tx_res_json = await chain.get_block_txs(
             session=session,
             height=raw.height,
         )
-
         # check that transactions exist
+        logger.info(tx_res_json)
         if tx_res_json is not None and "tx_responses" in tx_res_json:
             tx_responses = tx_res_json["tx_responses"]
+            print(len(tx_responses))
             raw.parse_tx_responses(tx_responses)
+            logger.info(
+                f"{raw.height=} {raw.tx_responses_tx_count=} {raw.block_tx_count=} {len(tx_responses)=}"
+            )
             # check that the number of transactions in the block matches the number of transactions in the tx_responses
             if raw.block_tx_count == raw.tx_responses_tx_count:
                 return raw
             else:
-                logger.info(f"process - {raw.height} - tx count not right")
+                logger.info(
+                    f"process - {raw.height} - tx count of {raw.tx_responses_tx_count=} {raw.block_tx_count=} {len(tx_responses)=} not right "
+                )
                 return Raw(
                     height=raw.height,
                     chain_id=raw.chain_id,
                     block_tx_count=raw.block_tx_count,
-                    tx_responses_tx_count=0,
+                    tx_responses_tx_count=None,
                     block=raw.block,
                     raw_block=raw.raw_block,
                 )
@@ -370,20 +378,20 @@ async def process_tx(raw: Raw, session: ClientSession, chain: CosmosChain) -> Ra
                 height=raw.height,
                 chain_id=raw.chain_id,
                 block_tx_count=raw.block_tx_count,
-                tx_responses_tx_count=0,
+                tx_responses_tx_count=None,
                 block=raw.block,
                 raw_block=raw.raw_block,
             )
     else:
-        logger.info(
+        logger.error(
             f"process - {raw.height} - raw.height or raw.block_tx_count does not exist so cannot parse txs"
         )
-        return raw
+        return None
 
 
 async def process_block(
     block_raw_data: dict, session: ClientSession, chain: CosmosChain
-) -> Raw:
+) -> Raw | None:
     """Processes the raw block data and returns a Raw object
 
     Args:
@@ -396,9 +404,21 @@ async def process_block(
     """
     raw = Raw()
     raw.parse_block(block_raw_data)
-    if raw.block and raw.height and raw.block_tx_count > 0:
+    logger = logging.getLogger("indexer")
+
+    # block unsuccessfully parsed
+    if raw.height is None or raw.block_tx_count is None:
+        logger.info("block not parsed")
+        return None
+
+    # block and transactions successfully parsed with transactions
+    if raw.height and raw.block_tx_count and raw.block_tx_count > 0:
+        logger.info("raw block tx count > 0")
         return await process_tx(raw, session, chain)
-    else:
+
+    # block successfully parsed but no transactions
+    if raw.height and raw.block_tx_count == 0:
+        logger.info("raw block tx count == 0")
         return Raw(
             height=raw.height,
             chain_id=raw.chain_id,
