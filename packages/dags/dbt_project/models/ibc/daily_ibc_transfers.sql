@@ -14,5 +14,5 @@ with
             ) ibct
         group by ibct.day, transfer_denom
     )
-select * 
+select *
 from daily_ibc_transfers
