@@ -1,5 +1,3 @@
-{{ config(materialized="view") }}
-
 with
     cum_txs_per_day as (
         select

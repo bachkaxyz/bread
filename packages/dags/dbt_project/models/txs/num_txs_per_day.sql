@@ -1,5 +1,3 @@
-{{ config(materialized="view") }}
-
 with
     num_txs_per_day as (
         select count(1) as tx_count, date_trunc('day', timestamp) as "day"
