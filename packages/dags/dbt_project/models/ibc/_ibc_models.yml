@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: ibc-transfers-in
+    description: "IBC Transfers In"
+  - name: ibc-transfers-out
+    description: "IBC Transfers Out"
+  - name: ibc-transfers
+    description: "Combined IBC Transfers"
+  - name: "daily-ibc-transfers"
+    description: "Volumne of IBC Transfers In out of Chain"
+  - name: "Cumulative IBC Transfer"
+    description: "Cumulative IBC Transfers"

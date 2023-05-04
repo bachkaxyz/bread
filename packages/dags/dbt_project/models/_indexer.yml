@@ -32,7 +32,9 @@ sources:
           - name: codespace
           - name: timestamp
       - name: logs
+        description: "Logs"
       - name: log_columns
+        description: "Log Columns"
       - name: blocks
         description: "Blocks"
         columns:
