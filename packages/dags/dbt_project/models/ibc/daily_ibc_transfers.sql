@@ -10,7 +10,7 @@ with
                     amount_over_direction,
                     date_trunc('day'::text, ibc_transfers.timestamp) as day,
                     transfer_denom
-                from {{ ref("ibc_transfer") }}
+                from {{ ref("ibc_transfers") }}
             ) ibct
         group by ibct.day, transfer_denom
     )
