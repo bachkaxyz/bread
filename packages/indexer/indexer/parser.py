@@ -349,7 +349,6 @@ async def process_tx(
         logger.info(tx_res_json)
         if tx_res_json is not None and "tx_responses" in tx_res_json:
             tx_responses = tx_res_json["tx_responses"]
-            print(len(tx_responses))
             raw.parse_tx_responses(tx_responses)
             logger.info(
                 f"{raw.height=} {raw.tx_responses_tx_count=} {raw.block_tx_count=} {len(tx_responses)=}"
