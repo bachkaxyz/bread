@@ -23,17 +23,14 @@ if [ "$ENVIRONMENT" == ""]; then
   exit 0;
 elif [ "$ENVIRONMENT" == "production" ]; then
     echo "production mode";
-    DOCKER_BUILDKIT=0 docker compose -f docker-compose.yaml -p  build;
-    docker compose -f docker-compose.yaml -p ${COMPOSE_PREFIX} up -d;
+    docker compose -f docker-compose.yaml -p ${COMPOSE_PREFIX} down;
     
 elif [ "$ENVIRONMENT" == "development" ]; then
     echo development mode;
-    DOCKER_BUILDKIT=0 docker compose -f docker-compose.yaml -f docker-compose.local.yaml build;
-    docker compose -f docker-compose.yaml -f docker-compose.local.yaml up -d;
+    docker compose -f docker-compose.yaml -f docker-compose.local.yaml down;
 elif [ "$ENVIRONMENT" == "testing" ]; then
     echo testing mode;
-    DOCKER_BUILDKIT=0 docker compose -f docker-compose.tests.yaml build;
-    docker compose -f docker-compose.tests.yaml up --abort-on-container-exit;
+    docker compose -f docker-compose.tests.yaml down --remove-orphans;
 else
   echo please set ENVIRONMENT to either 'production', 'development' or 'testing' in root .env;
   exit 0;
