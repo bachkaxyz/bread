@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - jackal
-
+      - secretnetwork
 
 jobs:
   api:
@@ -39,7 +39,7 @@ jobs:
 
     - name: Update Cloud Run service
       env:
-        SERVICE_NAME: sn-mono-${{ env.CI_ACTION_REF_NAME }}-api
+        SERVICE_NAME: ${{ env.CI_ACTION_REF_NAME }}-api
         IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:latest'
       run: |
         gcloud run services update $SERVICE_NAME \
@@ -80,7 +80,7 @@ jobs:
 
     - name: Update Cloud Run service
       env:
-        SERVICE_NAME: sn-mono-${{ env.CI_ACTION_REF_NAME }}-dashboard
+        SERVICE_NAME: ${{ env.CI_ACTION_REF_NAME }}-dashboard
         IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest'
       run: |
         gcloud run services update $SERVICE_NAME \
