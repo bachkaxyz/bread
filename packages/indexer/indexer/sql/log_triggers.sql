@@ -24,7 +24,8 @@ as
 $$
 language plpgsql
 ;
-CREATE OR REPLACE TRIGGER log_column_change
+DROP TRIGGER IF EXISTS log_column_change ON $schema.log_columns;
+CREATE TRIGGER log_column_change
 AFTER UPDATE
 ON $schema.log_columns
 FOR EACH ROW EXECUTE PROCEDURE on_log_column_change();
