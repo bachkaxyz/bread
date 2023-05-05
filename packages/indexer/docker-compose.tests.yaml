@@ -23,10 +23,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${COMPOSE_PREFIX}-indexer-test
+    container_name: indexer-test
   test_postgres:
     image: postgres:14
-    container_name: ${COMPOSE_PREFIX}-test-postgres
+    container_name: test-postgres
     environment: *common-variables
     ports:
       - 5430:5430
