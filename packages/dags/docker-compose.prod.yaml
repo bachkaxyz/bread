@@ -12,7 +12,7 @@ services:
       - ${DAGSTER_PORT}
       - -w
       - workspace.yaml
-    container_name: dagit
+    container_name: ${COMPOSE_PREFIX}-dagit
     expose:
       - ${DAGSTER_PORT}
     ports:
@@ -34,7 +34,7 @@ services:
       - run
       - dagster-daemon
       - run
-    container_name: daemon
+    container_name: ${COMPOSE_PREFIX}-daemon
     restart: on-failure
     volumes:
       - ./:/dags

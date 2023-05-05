@@ -23,9 +23,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: ${COMPOSE_PREFIX}-indexer-test
   test_postgres:
     image: postgres:14
-    container_name: test_postgres
+    container_name: ${COMPOSE_PREFIX}-test-postgres
     environment: *common-variables
     ports:
       - 5430:5430
@@ -37,4 +38,4 @@ services:
       timeout: 30s
       retries: 50
     restart: always
-    command: -p 5430 # runs postgres on a different port
+    command: -p 5430 # runs postgres on a different por
