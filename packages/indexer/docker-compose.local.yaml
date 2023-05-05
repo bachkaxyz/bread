@@ -5,6 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: indexer-dev
+    container_name: ${COMPOSE_PREFIX}-indexer
 networks:
   default:
     name: sn-mono-network

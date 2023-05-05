@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dagster
+    container_name: ${COMPOSE_PREFIX}-dagster
     volumes:
       - ./dags:/dags/dags
       - ./dagster_home:/dags/dagster_home
