@@ -2,15 +2,15 @@ version: '3'
 services:
   postgres:
     image: postgres:14
-    container_name: postgres # suppose to mirror our prod workhorse setup essentially
-    ports: 
+    container_name: ${COMPOSE_PREFIX}-postgres # suppose to mirror our prod workhorse setup essentially
+    ports:
       - 5431:5431
-    expose: 
+    expose:
       - 5431
-    env_file: 
+    env_file:
       - .env
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: [ "CMD", "pg_isready", "-U", "postgres" ]
       interval: 5s
       timeout: 30s
       retries: 50
@@ -21,6 +21,6 @@ services:
 volumes:
   postgres-db-volume:
 networks:
-  default: 
+  default:
     name: sn-mono-network
     driver: bridge
