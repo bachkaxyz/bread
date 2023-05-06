@@ -242,7 +242,6 @@ async def get_max_height(conn: Connection, chain: CosmosChain) -> int:
         column=0,
     )
     logger = logging.getLogger("indexer")
-    logger.info(res)
     if res:
         return res
     else:

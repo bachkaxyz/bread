@@ -346,7 +346,6 @@ async def process_tx(
             height=raw.height,
         )
         # check that transactions exist
-        logger.info(tx_res_json)
         if tx_res_json is not None and "tx_responses" in tx_res_json:
             tx_responses = tx_res_json["tx_responses"]
             raw.parse_tx_responses(tx_responses)
