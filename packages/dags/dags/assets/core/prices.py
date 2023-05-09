@@ -1,7 +1,10 @@
 from typing import List
+from asyncpg import Pool
 import pandas as pd
-from dagster import asset
+from dagster import asset, op
 from pycoingecko import CoinGeckoAPI
+
+from dags.resources.postgres_resource import PostgresResource
 
 
 @asset(required_resource_keys={"postgres"}, group_name="current_price")
@@ -23,12 +26,13 @@ def create_coin_gecko_id_table(context):
     non_argument_deps={"create_coin_gecko_id_table"},
     group_name="current_price",
 )
-def load_coin_gecko_ids(context) -> List[str]:
-    postgres = context.resources.postgres
-    conn = postgres._get_conn()
-
-    conn.execute(f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;")
-    results = conn.fetchall()
+async def load_coin_gecko_ids(context) -> List[str]:
+    postgres: PostgresResource = context.resources.postgres
+    pool: Pool = postgres._pool
+    async with pool.acquire() as conn:
+        results = await conn.fetch(
+            f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;"
+        )
     conn.close()
     print(results)
     res = [result[0] for result in results]
@@ -36,8 +40,8 @@ def load_coin_gecko_ids(context) -> List[str]:
     return res  # type: ignore
 
 
-@asset(io_manager_key="postgres", group_name="current_price")
-def get_current_price(load_coin_gecko_ids):
+@asset(group_name="current_price")
+def get_current_prices(load_coin_gecko_ids):
     cg = CoinGeckoAPI()
     res = []
     ids = ",".join(load_coin_gecko_ids)
@@ -70,3 +74,9 @@ def get_current_price(load_coin_gecko_ids):
     df.drop(columns=["last_updated_at"], inplace=True)
 
     return df
+
+
+# need to save output to postgres
+@asset(group_name="current_price")
+async def save_prices_to_postgres(get_current_prices: pd.DataFrame):
+    pass

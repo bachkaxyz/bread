@@ -1,3 +1,4 @@
+import asyncio
 import os
 from asyncpg import create_pool
 from dagster_dbt import dbt_cli_resource
@@ -9,6 +10,9 @@ from dotenv import load_dotenv
 from urllib.parse import quote_plus
 
 load_dotenv()
+
+
+ALL_RESOURCES = {}
 
 DBT_PROJECT_PATH = file_relative_path(__file__, "../../dbt_project")
 DBT_PROFILES = DBT_PROJECT_PATH + "/config"
@@ -22,6 +26,7 @@ dbt_resource = dbt_cli_resource.configured(
         "target": "dev",
     }
 )
+ALL_RESOURCES["dbt"] = dbt_resource
 
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "")
@@ -30,16 +35,32 @@ POSTGRES_PASSWORD = quote_plus(os.getenv("POSTGRES_PASSWORD", ""))
 POSTGRES_DB = os.getenv("POSTGRES_DB", "")
 JOB_SCHEMA = os.getenv("JOB_SCHEMA", "public")
 
-postgres_resource = PostgresResource(
-    _pool=create_pool(
+
+async def init_postgres():
+    pool = await create_pool(
         host=POSTGRES_HOST,
         port=POSTGRES_PORT,
         user=POSTGRES_USER,
         password=POSTGRES_PASSWORD,
         database=POSTGRES_DB,
-    ),
-    _schema=JOB_SCHEMA,
-)
+    )
+    if pool:
+        postgres_resource = PostgresResource(
+            _pool=pool,
+            _schema=JOB_SCHEMA,
+        )
+        # await postgres_resource.create_schema(schema=JOB_SCHEMA)
+
+        ALL_RESOURCES["postgres"] = postgres_resource
+
+
+loop = asyncio.get_event_loop()
+loop.run_until_complete(init_postgres())
+
+
+# "gcs": gcs,
+# "gcs_fm": gcs_fm,
+# "gcs_io_manager": gcs_io_manager,
 
 
 # gcs = gcs_resource.configured(
@@ -55,12 +76,3 @@ postgres_resource = PostgresResource(
 # gcs_fm = gcs_file_manager.configured(
 #     {"gcs_bucket": os.environ["BUCKET_NAME"], "gcs_prefix": os.environ["CHAIN_ID"]}
 # )
-
-
-ALL_RESOURCES = {
-    "dbt": dbt_resource,
-    "postgres": postgres_resource,
-    # "gcs": gcs,
-    # "gcs_fm": gcs_fm,
-    # "gcs_io_manager": gcs_io_manager,
-}
