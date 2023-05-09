@@ -21,5 +21,4 @@ sources:
           - name: keybase_identity
           - name: auth_claimers
           - name: totalspace
-          - name: used_space
           - name: freespace
