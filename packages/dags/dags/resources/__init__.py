@@ -1,9 +1,10 @@
 import os
+from asyncpg import create_pool
 from dagster_dbt import dbt_cli_resource
 from dagster import file_relative_path
 
 # from dagster_gcp.gcs import gcs_resource, gcs_pickle_io_manager, gcs_file_manager
-from dags.resources.postgres_io_manager import DbIOManager
+from dags.resources.postgres_resource import PostgresResource
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
 
@@ -22,17 +23,23 @@ dbt_resource = dbt_cli_resource.configured(
     }
 )
 
-POSTGRES_HOST = os.getenv("POSTGRES_HOST")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT")
-POSTGRES_USER = os.getenv("POSTGRES_USER")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "")
 POSTGRES_PASSWORD = quote_plus(os.getenv("POSTGRES_PASSWORD", ""))
-POSTGRES_DB = os.getenv("POSTGRES_DB")
-
+POSTGRES_DB = os.getenv("POSTGRES_DB", "")
 JOB_SCHEMA = os.getenv("JOB_SCHEMA", "public")
 
-POSTGRES_CON_STRING = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-
-postgres_resource = DbIOManager(con_string=POSTGRES_CON_STRING, schema=JOB_SCHEMA)
+postgres_resource = PostgresResource(
+    _pool=create_pool(
+        host=POSTGRES_HOST,
+        port=POSTGRES_PORT,
+        user=POSTGRES_USER,
+        password=POSTGRES_PASSWORD,
+        database=POSTGRES_DB,
+    ),
+    _schema=JOB_SCHEMA,
+)
 
 
 # gcs = gcs_resource.configured(
