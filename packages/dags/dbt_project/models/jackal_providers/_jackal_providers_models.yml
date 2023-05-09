@@ -1,0 +1,23 @@
+version: 2
+
+models:
+  - name: network-space
+    description: "Storage Space used by all Storage Providers"
+  - name: providers-space
+    description: "Storage Space each Storage Providers"
+sources:
+  - name: jackal_providers
+    schema: "{{env_var('JOB_SCHEMA', 'public')}}"
+    tables:
+      - name: providers
+        columns:
+          - name: address
+          - name: timestamp
+          - name: creator
+          - name: ip
+          - name: burned_contracts
+          - name: keybase_identity
+          - name: auth_claimers
+          - name: totalspace
+          - name: used_space
+          - name: freespace

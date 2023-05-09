@@ -10,7 +10,7 @@ class PostgresResource(ConfigurableResource):
     user: str
     password: str
     database: str
-    s: str
+    s: str  # schema
 
     async def get_conn(self) -> Connection:
         return await connect(

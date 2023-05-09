@@ -7,7 +7,13 @@ from pycoingecko import CoinGeckoAPI
 from dags.resources.postgres_resource import PostgresResource
 
 
-@asset(required_resource_keys={"postgres"}, group_name="current_price")
+GROUP_NAME = "current_price"
+KEY_PREFIX = "current_price"
+
+
+@asset(
+    required_resource_keys={"postgres"}, group_name=GROUP_NAME, key_prefix=KEY_PREFIX
+)
 def create_coin_gecko_id_table(context):
     postgres = context.resources.postgres
     conn = postgres._get_conn()
@@ -24,7 +30,8 @@ def create_coin_gecko_id_table(context):
 @asset(
     required_resource_keys={"postgres"},
     non_argument_deps={"create_coin_gecko_id_table"},
-    group_name="current_price",
+    group_name=GROUP_NAME,
+    key_prefix=KEY_PREFIX,
 )
 async def load_coin_gecko_ids(context) -> List[str]:
     postgres: PostgresResource = context.resources.postgres
@@ -39,7 +46,7 @@ async def load_coin_gecko_ids(context) -> List[str]:
     return res  # type: ignore
 
 
-@asset(group_name="current_price")
+@asset(group_name=GROUP_NAME, key_prefix=KEY_PREFIX)
 def get_current_prices(load_coin_gecko_ids):
     cg = CoinGeckoAPI()
     res = []
@@ -76,6 +83,6 @@ def get_current_prices(load_coin_gecko_ids):
 
 
 # need to save output to postgres
-@asset(group_name="current_price")
+@asset(group_name=GROUP_NAME, key_prefix=KEY_PREFIX)
 async def save_prices_to_postgres(get_current_prices: pd.DataFrame):
     pass

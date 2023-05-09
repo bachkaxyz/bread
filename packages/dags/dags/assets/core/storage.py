@@ -8,8 +8,11 @@ from aiohttp import ClientSession
 
 from dags.resources.postgres_resource import PostgresResource
 
+GROUP_NAME = "jackal_providers"
+KEY_PREFIX = "jackal_providers"
 
-@asset(group_name="jackal_providers")
+
+@asset(group_name=GROUP_NAME, key_prefix=KEY_PREFIX)
 def current_providers():
     j = requests.get(
         "https://jackal-rest.brocha.in/jackal-dao/canine-chain/storage/providers?pagination.limit=1000"
@@ -21,7 +24,7 @@ def current_providers():
     return df
 
 
-@asset(group_name="jackal_providers")
+@asset(group_name=GROUP_NAME, key_prefix=KEY_PREFIX)
 async def detailed_providers(current_providers: pd.DataFrame):
     async def get_addr_freespace(session: ClientSession, addr: str) -> Tuple[str, dict]:
         async with session.get(
@@ -51,7 +54,9 @@ async def detailed_providers(current_providers: pd.DataFrame):
     return current_providers
 
 
-@asset(group_name="jackal_providers", required_resource_keys={"postgres"})
+@asset(
+    group_name=GROUP_NAME, key_prefix=KEY_PREFIX, required_resource_keys={"postgres"}
+)
 async def create_providers_table(context: OpExecutionContext):
     postgres: PostgresResource = context.resources.postgres
     conn: Connection = await postgres.get_conn()
@@ -78,11 +83,12 @@ async def create_providers_table(context: OpExecutionContext):
 
 
 @asset(
-    group_name="jackal_providers",
+    group_name=GROUP_NAME,
+    key_prefix=KEY_PREFIX,
     required_resource_keys={"postgres"},
     non_argument_deps={"create_providers_table"},
 )
-async def save_providers(
+async def providers(
     context: OpExecutionContext,
     detailed_providers: pd.DataFrame,
 ):
@@ -91,7 +97,7 @@ async def save_providers(
 
     tuples = [tuple(x) for x in detailed_providers.values]
 
-    s = await conn.copy_records_to_table(
+    await conn.copy_records_to_table(
         table_name="providers",
         schema_name=str(postgres.s),
         records=tuples,
