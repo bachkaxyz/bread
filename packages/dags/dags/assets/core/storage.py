@@ -48,9 +48,10 @@ async def detailed_providers(current_providers: pd.DataFrame):
     freespace_df = pd.DataFrame(free_space, columns=["address", "freespace"])
 
     current_providers = current_providers.merge(freespace_df, on="address")
-    current_providers["used_space"] = (
-        current_providers["totalspace"] - current_providers["freespace"]
-    )
+
+    current_providers["freespace"] = current_providers["freespace"] / 10**9
+
+    current_providers["totalspace"] = current_providers["totalspace"] / 10**9
     return current_providers
 
 
@@ -69,9 +70,8 @@ async def create_providers_table(context: OpExecutionContext):
             burned_contracts TEXT,
             keybase_identity TEXT,
             auth_claimers TEXT[],
-            totalspace BIGINT,
-            used_space BIGINT,
-            freespace BIGINT,
+            totalspace decimal,
+            freespace decimal,
             timestamp TIMESTAMP DEFAULT NOW(),
             PRIMARY KEY (address, timestamp)
             
