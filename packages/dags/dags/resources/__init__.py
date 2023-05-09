@@ -35,28 +35,25 @@ POSTGRES_PASSWORD = quote_plus(os.getenv("POSTGRES_PASSWORD", ""))
 POSTGRES_DB = os.getenv("POSTGRES_DB", "")
 JOB_SCHEMA = os.getenv("JOB_SCHEMA", "public")
 
+postgres_resource = PostgresResource(
+    host=POSTGRES_HOST,
+    port=POSTGRES_PORT,
+    user=POSTGRES_USER,
+    password=POSTGRES_PASSWORD,
+    database=POSTGRES_DB,
+    s=JOB_SCHEMA,
+)
+
+ALL_RESOURCES["postgres"] = postgres_resource
+
 
 async def init_postgres():
-    pool = await create_pool(
-        host=POSTGRES_HOST,
-        port=POSTGRES_PORT,
-        user=POSTGRES_USER,
-        password=POSTGRES_PASSWORD,
-        database=POSTGRES_DB,
-    )
-    if pool:
-        postgres_resource = PostgresResource(
-            _pool=pool,
-            _schema=JOB_SCHEMA,
-        )
-        # await postgres_resource.create_schema(schema=JOB_SCHEMA)
-
-        ALL_RESOURCES["postgres"] = postgres_resource
+    await postgres_resource.create_schema()
 
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(init_postgres())
-
+print(ALL_RESOURCES)
 
 # "gcs": gcs,
 # "gcs_fm": gcs_fm,

@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Tuple
 from asyncpg import Connection, Pool
-from dagster import asset
+from dagster import OpExecutionContext, asset
 import pandas as pd
 import requests
 from aiohttp import ClientSession
@@ -16,7 +16,6 @@ def current_providers():
     ).json()
     providers = j["providers"]
     df = pd.DataFrame(providers)
-    df["timestamp"] = pd.to_datetime("now")
     df = df.astype({"totalspace": int})
     print(df)
     return df
@@ -53,18 +52,51 @@ async def detailed_providers(current_providers: pd.DataFrame):
 
 
 @asset(group_name="jackal_providers", required_resource_keys={"postgres"})
+async def create_providers_table(context: OpExecutionContext):
+    postgres: PostgresResource = context.resources.postgres
+    conn: Connection = await postgres.get_conn()
+    print(postgres.s)
+    query = f"""
+        CREATE TABLE IF NOT EXISTS {str(postgres.s)}.providers (
+            address TEXT,
+            creator TEXT,
+            ip TEXT,
+            burned_contracts TEXT,
+            keybase_identity TEXT,
+            auth_claimers TEXT[],
+            totalspace BIGINT,
+            used_space BIGINT,
+            freespace BIGINT,
+            timestamp TIMESTAMP DEFAULT NOW(),
+            PRIMARY KEY (address, timestamp)
+            
+        );
+        """
+    print(query)
+    await conn.execute(query)
+    await conn.close()
+
+
+@asset(
+    group_name="jackal_providers",
+    required_resource_keys={"postgres"},
+    non_argument_deps={"create_providers_table"},
+)
 async def save_providers(
-    context,
+    context: OpExecutionContext,
     detailed_providers: pd.DataFrame,
 ):
-    pool: Pool = context.resources.postgres._pool
-    async with pool.acquire() as conn:
-        conn: Connection
-        tuples = [tuple(x) for x in detailed_providers.values]
+    postgres: PostgresResource = context.resources.postgres
+    conn: Connection = await postgres.get_conn()
 
-        s = await conn.copy_records_to_table(
-            table_name="providers",
-            records=tuples,
-            columns=list(detailed_providers.columns),
-            timeout=10,
-        )
+    tuples = [tuple(x) for x in detailed_providers.values]
+
+    s = await conn.copy_records_to_table(
+        table_name="providers",
+        schema_name=str(postgres.s),
+        records=tuples,
+        columns=list(detailed_providers.columns),
+        timeout=10,
+    )
+
+    await conn.close()
