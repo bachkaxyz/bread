@@ -11,7 +11,8 @@ with
             )[1]::numeric as transfer_amount,
             (
                 regexp_matches(
-                    jsonb_array_elements_text(parsed -> 'transfer_amount'), '[\D]+[_a-zA-Z0-9]*'
+                    jsonb_array_elements_text(parsed -> 'transfer_amount'),
+                    '[\D]+[_a-zA-Z0-9]*'
                 )
             )[1] as transfer_denom,
             jsonb_array_elements_text(parsed -> 'ibc_transfer_sender') as ibc_sender,
