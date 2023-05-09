@@ -5,6 +5,8 @@ models:
     description: "Storage Space used by all Storage Providers"
   - name: providers-space
     description: "Storage Space each Storage Providers"
+  - name: count-providers
+    description: "Count of Storage Providers over time"
 sources:
   - name: jackal_providers
     schema: "{{env_var('JOB_SCHEMA', 'public')}}"
