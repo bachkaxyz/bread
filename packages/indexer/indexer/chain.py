@@ -357,7 +357,6 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
         time_between = int(time_between)
         batch_size = int(batch_size)
         step_size = int(step_size)
-        print(time_between, batch_size, step_size)
     except BaseException as e:
         raise EnvironmentError(
             "Either TIME_BETWEEN_BLOCKS, BATCH_SIZE OR STEP_SIZE is not of type int"
