@@ -3,8 +3,8 @@ from dash import Dash, html, dcc
 import dash
 from dotenv import load_dotenv
 
-from dashboard.setup import API_URL
-from dashboard.setup import CHAIN_NAME
+from dashboard.config import API_URL
+from dashboard.config import CHAIN_NAME
 from dashboard.components import nav
 
 load_dotenv()

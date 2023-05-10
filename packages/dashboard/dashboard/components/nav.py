@@ -1,6 +1,6 @@
 from dash import html
 
-from dashboard.setup import CHAIN_NAME
+from dashboard.config import CHAIN_NAME
 
 
 def NavBar():
