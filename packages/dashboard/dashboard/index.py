@@ -3,25 +3,23 @@ from dash import Dash, html, dcc
 import dash
 from dotenv import load_dotenv
 
+from dashboard.setup import API_URL
+from dashboard.setup import CHAIN_NAME
+from dashboard.components import nav
+
 load_dotenv()
 
-API_URL = os.getenv("API_URL")
-if API_URL is None:
-    raise Exception("API_URL environment variable not set")
-
-CHAIN_NAME = os.getenv("CHAIN_NAME")
-if CHAIN_NAME is None:
-    raise Exception("CHAIN_NAME environment variable not set")
 app = Dash(__name__, use_pages=True)
+
+server = app.server
 
 app.layout = html.Div(
     [
-        html.H1(f"{CHAIN_NAME.capitalize()} Analytics Dashboard"),
+        nav.NavBar(),
         dash.page_container,
     ]
 )
 
-server = app.server
 
 if __name__ == "__main__":
     print("Restarted Server")
@@ -31,4 +29,5 @@ if __name__ == "__main__":
     app.run(
         debug=True if os.getenv("ENVIRONMENT") == "development" else False,
         host="0.0.0.0",
+        port="8080",
     )
