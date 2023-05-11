@@ -10,12 +10,23 @@ from dags.assets import DBT_ASSETS, DBT_KEY
 ALL_JOBS = []
 ALL_SCHEDULES = []
 
-# DBT
-dbt_job = define_asset_job("dbt_job", selection=AssetSelection.assets(*DBT_ASSETS))
-dbt_job_schedule = ScheduleDefinition(job=dbt_job, cron_schedule="@hourly")
-ALL_JOBS.append(dbt_job)
-ALL_SCHEDULES.append(dbt_job_schedule)
+# IBC
+ibc_job = define_asset_job("ibc_job", selection=AssetSelection.groups("ibc"))
+ibc_job_schedule = ScheduleDefinition(job=ibc_job, cron_schedule="@hourly")
+ALL_JOBS.append(ibc_job)
+ALL_SCHEDULES.append(ibc_job_schedule)
 
+# TX's
+txs_job = define_asset_job("txs_job", selection=AssetSelection.groups("txs"))
+txs_job_schedule = ScheduleDefinition(job=txs_job, cron_schedule="@hourly")
+ALL_JOBS.append(txs_job)
+ALL_SCHEDULES.append(txs_job_schedule)
+
+# Gas
+gas_job = define_asset_job("gas_job", selection=AssetSelection.groups("gas"))
+gas_job_schedule = ScheduleDefinition(job=gas_job, cron_schedule="@hourly")
+ALL_JOBS.append(gas_job)
+ALL_SCHEDULES.append(gas_job_schedule)
 
 # Current Price
 current_price_job = define_asset_job(
