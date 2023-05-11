@@ -1,7 +1,7 @@
 from typing import List
-from asyncpg import Pool
+from asyncpg import Connection
 import pandas as pd
-from dagster import asset, op
+from dagster import asset
 from pycoingecko import CoinGeckoAPI
 
 from dags.resources.postgres_resource import PostgresResource
@@ -35,11 +35,10 @@ def create_coin_gecko_id_table(context):
 )
 async def load_coin_gecko_ids(context) -> List[str]:
     postgres: PostgresResource = context.resources.postgres
-    pool: Pool = postgres._pool
-    async with pool.acquire() as conn:
-        results = await conn.fetch(
-            f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;"
-        )
+    conn: Connection = await postgres.get_conn()
+    results = await conn.fetch(
+        f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;"
+    )
     conn.close()
     print(results)
     res = [result[0] for result in results]

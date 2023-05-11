@@ -1,15 +1,18 @@
 import asyncio
 from typing import List, Tuple
 from asyncpg import Connection, Pool
-from dagster import asset
+from dagster import OpExecutionContext, asset
 import pandas as pd
 import requests
 from aiohttp import ClientSession
 
 from dags.resources.postgres_resource import PostgresResource
 
+GROUP_NAME = "jackal_providers"
+KEY_PREFIX = "jackal_providers"
 
-@asset(group_name="jackal_providers")
+
+@asset(group_name=GROUP_NAME, key_prefix=KEY_PREFIX)
 def current_providers():
     j = requests.get(
         "https://jackal-rest.brocha.in/jackal-dao/canine-chain/storage/providers?pagination.limit=1000"
@@ -22,7 +25,7 @@ def current_providers():
     return df
 
 
-@asset(group_name="jackal_providers")
+@asset(group_name=GROUP_NAME, key_prefix=KEY_PREFIX)
 async def detailed_providers(current_providers: pd.DataFrame):
     async def get_addr_freespace(session: ClientSession, addr: str) -> Tuple[str, dict]:
         async with session.get(
@@ -46,25 +49,61 @@ async def detailed_providers(current_providers: pd.DataFrame):
     freespace_df = pd.DataFrame(free_space, columns=["address", "freespace"])
 
     current_providers = current_providers.merge(freespace_df, on="address")
-    current_providers["used_space"] = (
-        current_providers["totalspace"] - current_providers["freespace"]
-    )
+
+    current_providers["freespace"] = current_providers["freespace"] / 10**9
+    current_providers["totalspace"] = current_providers["totalspace"] / 10**9
+
     return current_providers
 
 
-@asset(group_name="jackal_providers", required_resource_keys={"postgres"})
-async def save_providers(
-    context,
+@asset(
+    group_name=GROUP_NAME, key_prefix=KEY_PREFIX, required_resource_keys={"postgres"}
+)
+async def create_providers_table(context: OpExecutionContext):
+    postgres: PostgresResource = context.resources.postgres
+    conn: Connection = await postgres.get_conn()
+    print(postgres.s)
+    query = f"""
+        CREATE TABLE IF NOT EXISTS {str(postgres.s)}.providers (
+            address TEXT,
+            creator TEXT,
+            ip TEXT,
+            burned_contracts TEXT,
+            keybase_identity TEXT,
+            auth_claimers TEXT[],
+            totalspace decimal,
+            freespace decimal,
+            timestamp TIMESTAMP DEFAULT NOW(),
+            PRIMARY KEY (address, timestamp)
+            
+        );
+        """
+    print(query)
+    await conn.execute(query)
+    await conn.close()
+
+
+@asset(
+    group_name=GROUP_NAME,
+    key_prefix=KEY_PREFIX,
+    required_resource_keys={"postgres"},
+    non_argument_deps={"create_providers_table"},
+)
+async def providers(
+    context: OpExecutionContext,
     detailed_providers: pd.DataFrame,
 ):
-    pool: Pool = context.resources.postgres._pool
-    async with pool.acquire() as conn:
-        conn: Connection
-        tuples = [tuple(x) for x in detailed_providers.values]
+    postgres: PostgresResource = context.resources.postgres
+    conn: Connection = await postgres.get_conn()
 
-        s = await conn.copy_records_to_table(
-            table_name="providers",
-            records=tuples,
-            columns=list(detailed_providers.columns),
-            timeout=10,
-        )
+    tuples = [tuple(x) for x in detailed_providers.values]
+
+    await conn.copy_records_to_table(
+        table_name="providers",
+        schema_name=str(postgres.s),
+        records=tuples,
+        columns=list(detailed_providers.columns),
+        timeout=10,
+    )
+
+    await conn.close()
