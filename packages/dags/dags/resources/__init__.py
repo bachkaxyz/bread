@@ -7,7 +7,6 @@ from dagster import file_relative_path
 # from dagster_gcp.gcs import gcs_resource, gcs_pickle_io_manager, gcs_file_manager
 from dags.resources.postgres_resource import PostgresResource
 from dotenv import load_dotenv
-from urllib.parse import quote_plus
 
 
 load_dotenv()
@@ -32,8 +31,9 @@ ALL_RESOURCES["dbt"] = dbt_resource
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "")
-POSTGRES_PASSWORD = quote_plus(os.getenv("POSTGRES_PASSWORD", ""))
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "")
 POSTGRES_DB = os.getenv("POSTGRES_DB", "")
+
 JOB_SCHEMA = os.getenv("JOB_SCHEMA", "public")
 
 postgres_resource = PostgresResource(
