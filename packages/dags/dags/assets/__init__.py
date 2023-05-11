@@ -8,9 +8,7 @@ from dags.resources import DBT_PROFILES, DBT_PROJECT_PATH
 CORE_KEY = "core"
 DBT_KEY = "dbt"
 
-CORE_ASSETS = load_assets_from_package_module(
-    package_module=core, key_prefix=[CORE_KEY]
-)
+CORE_ASSETS = load_assets_from_package_module(package_module=core)
 
 DBT_ASSETS = load_assets_from_dbt_project(
     profiles_dir=DBT_PROFILES,

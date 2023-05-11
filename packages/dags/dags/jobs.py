@@ -28,3 +28,16 @@ current_price_job_schedule = ScheduleDefinition(
 
 ALL_JOBS.append(current_price_job)
 ALL_SCHEDULES.append(current_price_job_schedule)
+
+# Jackal Providers
+
+current_providers_job = define_asset_job(
+    "current_providers_job",
+    selection=AssetSelection.groups("jackal_providers"),
+)
+current_providers_job_schedule = ScheduleDefinition(
+    job=current_providers_job, cron_schedule="@hourly"
+)
+
+ALL_JOBS.append(current_providers_job)
+ALL_SCHEDULES.append(current_providers_job_schedule)
