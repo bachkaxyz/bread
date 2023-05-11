@@ -11,7 +11,6 @@ def NavBar():
                 id="menu",
                 children=[
                     NavItem("Transactions", "/txs"),
-                    NavItem("Storage", "/storage"),
                 ],
             ),
         ]
