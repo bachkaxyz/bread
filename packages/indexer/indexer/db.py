@@ -137,7 +137,7 @@ async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
             return True
 
     else:
-        logger.info(f"{raw.height} {raw.chain_id} {raw.block}")
+        logger.info(f"{raw.height} {raw.chain_id} is None")
         return False
 
 
@@ -242,7 +242,6 @@ async def get_max_height(conn: Connection, chain: CosmosChain) -> int:
         column=0,
     )
     logger = logging.getLogger("indexer")
-    logger.info(res)
     if res:
         return res
     else:

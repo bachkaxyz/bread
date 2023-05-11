@@ -26,3 +26,13 @@ async def daily_txs():
         from {DBT_SCHEMA}.num_txs_per_day
         """
     )
+
+
+@router.get("/gas")
+async def get_gas_used_per_day():
+    return await database.fetch_all(
+        f"""
+        select *
+        from {DBT_SCHEMA}.gas_used_per_day
+        """
+    )

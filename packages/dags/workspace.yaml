@@ -1,7 +1,2 @@
 load_from:
   - python_module: dags
-execution:
-  config:
-    multiprocess: 
-      start_method:
-        forkserver:
