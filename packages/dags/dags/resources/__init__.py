@@ -9,6 +9,7 @@ from dags.resources.postgres_resource import PostgresResource
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
 
+
 load_dotenv()
 
 
@@ -53,7 +54,6 @@ async def init_postgres():
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(init_postgres())
-print(ALL_RESOURCES)
 
 # "gcs": gcs,
 # "gcs_fm": gcs_fm,

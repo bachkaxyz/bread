@@ -1,7 +1,7 @@
 from typing import List
-from asyncpg import Connection, Pool
+from asyncpg import Connection
 import pandas as pd
-from dagster import asset, op
+from dagster import asset
 from pycoingecko import CoinGeckoAPI
 
 from dags.resources.postgres_resource import PostgresResource

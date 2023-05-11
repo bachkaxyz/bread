@@ -19,6 +19,7 @@ def current_providers():
     ).json()
     providers = j["providers"]
     df = pd.DataFrame(providers)
+    df["timestamp"] = pd.to_datetime("now")
     df = df.astype({"totalspace": int})
     print(df)
     return df
@@ -50,8 +51,8 @@ async def detailed_providers(current_providers: pd.DataFrame):
     current_providers = current_providers.merge(freespace_df, on="address")
 
     current_providers["freespace"] = current_providers["freespace"] / 10**9
-
     current_providers["totalspace"] = current_providers["totalspace"] / 10**9
+
     return current_providers
 
 
