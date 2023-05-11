@@ -1,7 +1,10 @@
 from typing import List
+from asyncpg import Connection
 import pandas as pd
 from dagster import asset
 from pycoingecko import CoinGeckoAPI
+
+from dags.resources.postgres_resource import PostgresResource
 
 
 GROUP_NAME = "current_price"
@@ -30,12 +33,12 @@ def create_coin_gecko_id_table(context):
     group_name=GROUP_NAME,
     key_prefix=KEY_PREFIX,
 )
-def load_coin_gecko_ids(context) -> List[str]:
-    postgres = context.resources.postgres
-    conn = postgres._get_conn()
-
-    conn.execute(f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;")
-    results = conn.fetchall()
+async def load_coin_gecko_ids(context) -> List[str]:
+    postgres: PostgresResource = context.resources.postgres
+    conn: Connection = await postgres.get_conn()
+    results = await conn.fetch(
+        f"SELECT id FROM {context.resources.postgres._schema}.coin_gecko_ids;"
+    )
     conn.close()
     print(results)
     res = [result[0] for result in results]
