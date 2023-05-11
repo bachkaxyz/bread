@@ -24,7 +24,7 @@ if [ "$ENVIRONMENT" == ""]; then
 elif [ "$ENVIRONMENT" == "production" ]; then
     echo "production mode";
     DOCKER_BUILDKIT=0 docker compose -f docker-compose.yaml -p  build;
-    docker compose -f docker-compose.yaml -p ${COMPOSE_PREFIX} up -d;
+    docker compose -f docker-compose.yaml -p ${COMPOSE_PREFIX}-indexer up -d;
     
 elif [ "$ENVIRONMENT" == "development" ]; then
     echo development mode;
