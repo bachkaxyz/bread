@@ -5,3 +5,4 @@ select
     json_object_agg(address, totalspace) as totalspace
 from {{ source("jackal_providers", "providers") }}
 group by timestamp
+order by timestamp desc
