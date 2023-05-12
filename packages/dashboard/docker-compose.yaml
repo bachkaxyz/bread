@@ -7,12 +7,14 @@ services:
     image: dashboard-dev
     restart: always
     ports:
-      - "8050:8050"
+      - "${DASHBOARD_PORT}:${DASHBOARD_PORT}"
     env_file:
       - .env
       - ./../../.env
     volumes:
       - .:/dashboard
+    environment:
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-8050}
 networks:
   default:
     name: sn-mono-network
