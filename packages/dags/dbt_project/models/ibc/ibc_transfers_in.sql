@@ -40,3 +40,4 @@ with
     )
 select *
 from ibc_transfers_in
+order by timestamp desc

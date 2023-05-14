@@ -36,3 +36,4 @@ with
     )
 select *
 from ibc_transfers_out
+order by timestamp desc
