@@ -23,5 +23,7 @@ select
             '[\D]+[_a-zA-Z0-9]*'
         )
     )[1] as transfer_denom
-from {{ source("indexer", "logs") }} left join {{ source("indexer", "txs")}} on logs.txhash = txs.txhash
+from {{ source("indexer", "logs") }}
+left join {{ source("indexer", "txs") }} on logs.txhash = txs.txhash
 where parsed -> 'message_action' ? 'buy_storage'
+order by txs.timestamp desc

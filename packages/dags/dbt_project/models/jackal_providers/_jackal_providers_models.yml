@@ -7,6 +7,8 @@ models:
     description: "Storage Space each Storage Providers"
   - name: count-providers
     description: "Count of Storage Providers over time"
+  - name: distribute-rewards
+    description: "Storage Space Rewards distributed from storage module to providers over time"
 sources:
   - name: jackal_providers
     schema: "{{env_var('JOB_SCHEMA', 'public')}}"
