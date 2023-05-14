@@ -16,3 +16,6 @@ shandy-sqlfmt = {version = "^0.17.1", extras = ["jinjafmt"]}
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.sqlfmt]
+exclude=["packages/dags/dbt_project/target/**/*", "packages/dags/dbt_project/dbt_packages/**/*", "packages/dags/dbt_project/models/jackal_providers/buy_storage.sql"]
