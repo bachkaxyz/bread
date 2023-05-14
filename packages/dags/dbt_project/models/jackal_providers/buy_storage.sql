@@ -11,18 +11,17 @@
 select
     logs.txhash,
     txs.timestamp,
-    message_sender  # >>'{0}' as message_sender, 
+    message_sender#>>'{0}' as message_sender, 
     (
         regexp_matches(
-            parsed -> 'transfer_amount'  # >>'{0}', '[0-9]*'
+            (parsed -> 'transfer_amount')#>>'{0}', '[0-9]*'
         )
-    )[1]::numeric as transfer_amount
+    )[1]::numeric as transfer_amount,
     (
         regexp_matches(
-            parsed -> 'transfer_amount'  # >>'{0}',
+            (parsed -> 'transfer_amount')#>>'{0}',
             '[\D]+[_a-zA-Z0-9]*'
         )
     )[1] as transfer_denom
-from {{ source("indexer", "logs") }}
-left join indexer.txs on logs.txhash = txs.txhash
+from {{ source("indexer", "logs") }} left join {{ source("indexer", "txs")}} on logs.txhash = txs.txhash
 where parsed -> 'message_action' ? 'buy_storage'
