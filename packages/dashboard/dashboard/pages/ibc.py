@@ -21,6 +21,9 @@ layout = html.Div(
                         y="cum_amount_over_direction",
                         title="Cumulative IBC Transfers",
                         color="transfer_denom",
+                    ).update_layout(
+                        xaxis_title="Time",
+                        yaxis_title="Amount Transfered",
                     ),
                     id="ibc_cum",
                 ),
@@ -29,8 +32,11 @@ layout = html.Div(
                         daily_volume,
                         x="day",
                         y="total_amount_over_direction",
-                        title="Cumulative IBC Transfers",
+                        title="IBC Transfers Volume",
                         color="transfer_denom",
+                    ).update_layout(
+                        xaxis_title="Time",
+                        yaxis_title="Amount Transfered",
                     ),
                     id="ibc_cum",
                 ),
