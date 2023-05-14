@@ -11,10 +11,10 @@ services:
     env_file:
       - .env
       - ./../../.env
+    environment:
+      - DASHBOARD_PORT=$DASHBOARD_PORT:8050
     volumes:
       - .:/dashboard
-    environment:
-      - DASHBOARD_PORT=${DASHBOARD_PORT:-8050}
 networks:
   default:
     name: sn-mono-network
