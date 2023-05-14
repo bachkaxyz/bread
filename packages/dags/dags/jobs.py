@@ -50,5 +50,14 @@ current_providers_job_schedule = ScheduleDefinition(
     job=current_providers_job, cron_schedule="@hourly"
 )
 
+# Jackal Storage
+storage_job = define_asset_job(
+    "storage_job", selection=AssetSelection.groups("storage")
+)
+storage_job_schedule = ScheduleDefinition(job=storage_job, cron_schedule="@hourly")
+ALL_JOBS.append(storage_job)
+ALL_SCHEDULES.append(storage_job_schedule)
+
+
 ALL_JOBS.append(current_providers_job)
 ALL_SCHEDULES.append(current_providers_job_schedule)
