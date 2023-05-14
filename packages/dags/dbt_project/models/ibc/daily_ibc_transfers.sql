@@ -16,3 +16,4 @@ with
     )
 select *
 from daily_ibc_transfers
+order by day desc
