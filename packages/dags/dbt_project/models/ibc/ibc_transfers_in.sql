@@ -10,11 +10,10 @@ with
                 )
             )[1]::numeric as transfer_amount,
             (
-                regexp_matches(
-                    jsonb_array_elements_text(parsed -> 'transfer_amount'),
-                    '[\D]+[_a-zA-Z0-9]*'
+                regexp_replace(
+                    jsonb_array_elements_text(parsed -> 'transfer_amount'), '[0-9]*', ''
                 )
-            )[1] as transfer_denom,
+            ) as transfer_denom,
             jsonb_array_elements_text(
                 parsed -> 'fungible_token_packet_sender'
             ) as ibc_sender,
@@ -41,3 +40,4 @@ with
     )
 select *
 from ibc_transfers_in
+order by timestamp desc
