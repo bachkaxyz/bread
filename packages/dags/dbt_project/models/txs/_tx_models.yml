@@ -17,3 +17,5 @@ models:
           - unique
           - not_null
       - name: tx_count
+  - name: tx-events
+    description: "Parse Transaction Level Events"

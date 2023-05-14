@@ -1,4 +1,5 @@
 from dash import html
+import dash
 
 from dashboard.config import CHAIN_NAME
 
@@ -10,7 +11,11 @@ def NavBar():
             html.Div(
                 id="menu",
                 children=[
-                    NavItem("Transactions", "/txs"),
+                    NavItem(
+                        name=page["name"],
+                        link=page["path"],
+                    )
+                    for page in dash.page_registry.values()
                 ],
             ),
         ]

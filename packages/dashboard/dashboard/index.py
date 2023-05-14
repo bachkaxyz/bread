@@ -3,8 +3,7 @@ from dash import Dash, html, dcc
 import dash
 from dotenv import load_dotenv
 
-from dashboard.config import API_URL
-from dashboard.config import CHAIN_NAME
+from dashboard.config import API_URL, CHAIN_NAME, PORT
 from dashboard.components import nav
 
 load_dotenv()
@@ -29,5 +28,5 @@ if __name__ == "__main__":
     app.run(
         debug=True if os.getenv("ENVIRONMENT") == "development" else False,
         host="0.0.0.0",
-        port="8080",
+        port=PORT if PORT else "8050",
     )

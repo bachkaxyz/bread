@@ -6,7 +6,9 @@ import requests
 import pandas as pd
 import plotly.express as px, plotly.graph_objects as go
 
-dash.register_page(__name__, path="/txs")
+dash.register_page(__name__, path="/txs", name="Transactions and Gas Usage")
+print(f"{API_URL}/txs/daily")
+daily = requests.get(f"{API_URL}/txs/daily").json()
 
 daily = requests.get(f"{API_URL}/txs/daily").json()
 daily_df = pd.DataFrame(daily)
