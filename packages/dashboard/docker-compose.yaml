@@ -12,7 +12,7 @@ services:
       - .env
       - ./../../.env
     environment:
-      - DASHBOARD_PORT=$DASHBOARD_PORT:8050
+      - DASHBOARD_PORT=${DASHBOARD_PORT:-8050}
     volumes:
       - .:/dashboard
 networks:
