@@ -1,0 +1,7 @@
+version: 2
+
+models:
+  - name: buy-storage
+    description: "Storage Space Purchased over time by number users and cost"
+  - name: cum-storage-purchased
+    description: "Cumulative Storage Space over time"
