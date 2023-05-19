@@ -1,7 +1,7 @@
 from datetime import datetime
 import json
 from typing import List
-from indexer.parser import Log, Raw, parse_log_event, parse_logs
+from processor import Log, Raw, parse_log_event, parse_logs
 import pytest
 
 from indexer.exceptions import BlockPrimaryKeyNotDefinedError

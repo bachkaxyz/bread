@@ -1888,6 +1888,7 @@ asyncpg = "^0.27.0"
 deepdiff = "^6.3.0"
 google-cloud-storage = "^2.8.0"
 pandas = "^2.0"
+parser = {path = "../parser", develop = true}
 python-dotenv = "^1.0"
 
 [package.source]
@@ -2512,6 +2513,19 @@ files = [
 
 [package.dependencies]
 future = "*"
+
+[[package]]
+name = "parser"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = "3.10.*"
+files = []
+develop = true
+
+[package.source]
+type = "directory"
+url = "packages/parser"
 
 [[package]]
 name = "pathspec"

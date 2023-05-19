@@ -1,7 +1,7 @@
 import asyncio
 from typing import List
 from indexer.chain import CosmosChain
-from indexer.parser import Raw, process_tx, process_block
+from processor import Raw, process_tx, process_block
 from indexer.live import live, get_data_live
 from indexer.db import (
     create_tables,

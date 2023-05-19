@@ -2,8 +2,8 @@ from aiohttp import ClientSession
 from asyncpg import Pool
 from indexer.chain import LATEST, CosmosChain
 from indexer.db import upsert_data, get_max_height
-from indexer.parser import Raw
-from indexer.parser import process_block
+from processor import Raw
+from processor import process_block
 import logging
 from google.cloud.storage import Bucket
 
