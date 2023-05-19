@@ -3,3 +3,5 @@
 .DS_Store
 **.coverage
 creds.json
+**/dist
+**/info
