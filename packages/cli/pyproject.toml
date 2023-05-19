@@ -1,0 +1,14 @@
+[tool.poetry]
+name = "cli"
+version = "0.1.0"
+description = ""
+authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
+
+[tool.poetry.dependencies]
+python = "3.10.*"
+typer = {version = "^0.9.0", extras = ["all"]}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
