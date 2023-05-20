@@ -1,4 +1,4 @@
-name: Indexer Tests
+name: Tests
 
 on:
   push:
