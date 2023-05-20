@@ -12,7 +12,6 @@ def test_parse_individual_log_event(log_data):
     event = log_data[0]["events"][0]
     parsed_log = parse_log_event(event)
     assert parsed_log == {
-        (): [],
         ("message", "action"): ["/secret.compute.v1beta1.MsgExecuteContract"],
         ("message", "module"): ["compute"],
         ("message", "sender"): ["secret1rjml9f6ma7rwgqq9ud8e0aw2arhhj4v4hhzc4k"],
