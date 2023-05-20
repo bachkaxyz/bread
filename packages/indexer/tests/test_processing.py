@@ -524,7 +524,7 @@ async def test_process_tx_incorrect_wrong_input(
 async def test_parse_block_unsuccessfully_parse(
     mock_client: ClientSession, mock_chain: CosmosChain, mocker
 ):
-    mocker.patch("indexer.parser.Raw.parse_block", return_value=None)
+    mocker.patch("parse.Raw.parse_block", return_value=None)
 
     assert await process_block({}, mock_client, mock_chain) == None
 

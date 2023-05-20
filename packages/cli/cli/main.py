@@ -11,9 +11,9 @@ def indexer():
     remove_all_package_builds()
     build_all_packages()
     load_env_vars()
-    parse_test = run_parse_tests()
+    parse()
     indexer_tests = run_indexer_tests()
-    if parse_test.returncode != 0 or indexer_tests.returncode != 0:
+    if indexer_tests.returncode != 0:
         raise typer.Exit(code=1)
 
 
