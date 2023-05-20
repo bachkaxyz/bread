@@ -1,7 +1,8 @@
 import asyncio
 from typing import List
 from indexer.chain import CosmosChain
-from processor import Raw, process_tx, process_block
+from parse import Raw
+from indexer.process import process_tx, process_block
 from indexer.live import live, get_data_live
 from indexer.db import (
     create_tables,
@@ -17,15 +18,13 @@ from indexer.backfill import (
     backfill_wrong_count,
 )
 from tests.db_test import (
-    raws,
     mock_schema,
     mock_client,
     mock_pool,
-    unparsed_raw_data,
     mock_bucket,
 )
 from tests.chain_test import mock_chain, emptyApi
-
+from parse.fixtures import *
 from asyncpg import Connection, Pool
 from aiohttp import ClientSession
 from google.cloud.storage import Bucket

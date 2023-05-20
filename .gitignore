@@ -1,7 +1,10 @@
 .env
+creds.json
+
 **/__pycache__
 .DS_Store
+
 **.coverage
-creds.json
+**/coverage.xml
 **/dist
 **/info

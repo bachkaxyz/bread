@@ -9,7 +9,7 @@ from aiohttp import ClientSession
 from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
 from indexer.exceptions import ChainDataIsNoneError
-from processor import Raw
+from parse import Raw
 import logging
 from google.cloud.storage import Blob, Client, Bucket
 

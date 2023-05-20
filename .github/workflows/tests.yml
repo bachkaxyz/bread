@@ -28,3 +28,13 @@ jobs:
           - name: Docker Compose Run Tests
             working-directory: packages/indexer
             run: docker compose -f docker-compose.tests.yaml run indexer-test
+  parse:
+      runs-on: ubuntu-latest
+      steps:
+          - uses: actions/checkout@v3
+
+
+          - name:  Run Tests
+            working-directory: packages/parse
+            run: docker compose -f docker-compose.tests.yaml run parse-test
+          

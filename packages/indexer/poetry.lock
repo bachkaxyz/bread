@@ -1107,6 +1107,19 @@ test = ["hypothesis (>=6.34.2)", "pytest (>=7.0.0)", "pytest-asyncio (>=0.17.0)"
 xml = ["lxml (>=4.6.3)"]
 
 [[package]]
+name = "parse"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = "3.10.*"
+files = []
+develop = true
+
+[package.source]
+type = "directory"
+url = "../parse"
+
+[[package]]
 name = "pluggy"
 version = "1.0.0"
 description = "plugin and hook calling mechanisms for python"
@@ -1120,19 +1133,6 @@ files = [
 [package.extras]
 dev = ["pre-commit", "tox"]
 testing = ["pytest", "pytest-benchmark"]
-
-[[package]]
-name = "processor"
-version = "0.1.0"
-description = ""
-optional = false
-python-versions = "3.10.*"
-files = []
-develop = true
-
-[package.source]
-type = "directory"
-url = "../processor"
 
 [[package]]
 name = "protobuf"
@@ -1547,4 +1547,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "3.10.*"
-content-hash = "df1fda85d6976dd6ccd22f21ad216389f1b1bc472837d8799f18e8cdf891402b"
+content-hash = "43e317402ad785a397a5698e86efca4754d5a4bcd40581b71298d9744e7b0a50"

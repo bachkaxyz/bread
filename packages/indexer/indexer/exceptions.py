@@ -14,10 +14,6 @@ class APIResponseError(ChainDataError):
     pass
 
 
-class BlockPrimaryKeyNotDefinedError(ChainDataError):
-    pass
-
-
 class ProcessChainDataError(BaseException):
     pass
 

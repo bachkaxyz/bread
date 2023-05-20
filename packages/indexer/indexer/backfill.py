@@ -13,7 +13,8 @@ from indexer.db import (
     blob_upload_times,
     upsert_times,
 )
-from indexer.parser import Raw, process_tx, process_block
+from parse import Raw
+from indexer.process import process_tx, process_block
 import logging
 from google.cloud.storage import Bucket
 
