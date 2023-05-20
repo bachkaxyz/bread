@@ -47,3 +47,6 @@ jobs:
           
           - name: 'Parse Tests'
             run: python3 packages/cli/cli/main.py test parse
+
+          - name:
+            run: echo $?

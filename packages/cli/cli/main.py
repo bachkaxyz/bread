@@ -20,6 +20,7 @@ def indexer():
 @test.command()
 def parse():
     parse_test = run_parse_tests()
+    print(parse_test.returncode)
     if parse_test.returncode != 0:
         raise typer.Exit(code=1)
 
@@ -44,7 +45,7 @@ def run_parse_tests():
         shell=True,
     )
     return subprocess.run(
-        "docker compose -f packages/parse/docker-compose.tests.yaml up --build",
+        "docker compose -f packages/parse/docker-compose.tests.yaml up --build --abort-on-container-exit",
         shell=True,
     )
 
