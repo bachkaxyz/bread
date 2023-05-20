@@ -11,13 +11,17 @@ def indexer():
     remove_all_package_builds()
     build_all_packages()
     load_env_vars()
-    run_parse_tests()
-    run_indexer_tests()
+    parse_test = run_parse_tests()
+    indexer_tests = run_indexer_tests()
+    if parse_test.returncode != 0 or indexer_tests.returncode != 0:
+        raise typer.Exit(code=1)
 
 
 @test.command()
 def parse():
-    run_parse_tests()
+    parse_test = run_parse_tests()
+    if parse_test.returncode != 0:
+        raise typer.Exit(code=1)
 
 
 def remove_all_package_builds():
@@ -39,13 +43,10 @@ def run_parse_tests():
         "docker compose -f packages/parse/docker-compose.tests.yaml down --remove-orphans",
         shell=True,
     )
-    test = subprocess.run(
+    return subprocess.run(
         "docker compose -f packages/parse/docker-compose.tests.yaml up --build",
         shell=True,
     )
-    if test.returncode != 0:
-        print("Parser tests failed!")
-        exit(1)
 
 
 def run_indexer_tests():
@@ -54,13 +55,10 @@ def run_indexer_tests():
         "docker compose -f packages/indexer/docker-compose.tests.yaml down --remove-orphans",
         shell=True,
     )
-    test = subprocess.run(
+    return subprocess.run(
         "docker compose -f packages/indexer/docker-compose.tests.yaml up --build --abort-on-container-exit",
         shell=True,
     )
-    if test.returncode != 0:
-        print("Parser tests failed!")
-        exit(1)
 
 
 app.add_typer(test, name="test")
