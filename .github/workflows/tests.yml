@@ -45,7 +45,7 @@ jobs:
             uses: actions/github-script@v3
             with:
               script: |
-                  core.setFailed('Coverage  not correct!')
+                  core.setFailed('Coverage not correct!')
 
           
   parse:
@@ -78,4 +78,4 @@ jobs:
             uses: actions/github-script@v3
             with:
               script: |
-                  core.setFailed('Coverage  not correct!')
+                  core.setFailed('Coverage not correct!')
