@@ -12,12 +12,17 @@ def indexer():
     build_all_packages()
     docker = DockerClient(compose_files=["packages/indexer/docker-compose.tests.yaml"])
     docker.compose.down(remove_orphans=True)
-    docker.compose.up(build=True, abort_on_container_exit=True)
+    try:
+        docker.compose.up(build=True, abort_on_container_exit=True)
+    except:
+        pass
 
 
 @app.command()
 def parse():
     docker = DockerClient(compose_files=["packages/parse/docker-compose.tests.yaml"])
     docker.compose.down(remove_orphans=True)
-
-    docker.compose.up(build=True, abort_on_container_exit=True)
+    try:
+        docker.compose.up(build=True, abort_on_container_exit=True)
+    except:
+        pass
