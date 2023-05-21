@@ -1,6 +1,6 @@
 import subprocess
 import typer
-from cli.utils import remove_all_package_builds, load_env_vars, build_all_packages
+from cli.utils import remove_all_package_builds, root_env_vars, build_all_packages
 
 app = typer.Typer()
 
@@ -9,7 +9,6 @@ app = typer.Typer()
 def indexer():
     remove_all_package_builds()
     build_all_packages()
-    load_env_vars()
     parse()
     indexer_tests = run_indexer_tests()
     if indexer_tests.returncode != 0:

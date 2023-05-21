@@ -6,7 +6,6 @@ set -e
 DIR="$( cd "$( dirname "$0" )" && pwd )"
 cd "${DIR}/.." || exit
 
-poetry version
 VERSION=$(poetry version | awk '{print $2}')
 echo "Building version: $VERSION"
 if [ "$(uname)" = "Darwin" ]; then export SEP=" "; else SEP=""; fi

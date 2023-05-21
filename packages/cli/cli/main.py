@@ -1,5 +1,4 @@
-import subprocess
-from cli.utils import build_all_packages, load_env_vars
+from cli.utils import build_all_packages, root_env_vars
 import typer
 from cli import test, run
 
@@ -14,8 +13,8 @@ def build():
 
 
 @app.command()
-def load_vars():
-    load_env_vars()
+def get_env():
+    print(root_env_vars())
 
 
 if __name__ == "__main__":

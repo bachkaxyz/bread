@@ -1,14 +1,19 @@
+import os
 import subprocess
+from typing import Dict
+
+from dotenv import dotenv_values
 
 
 def remove_all_package_builds():
-    subprocess.run("bash scripts/remove_all_package_builds.sh", shell=True)
+    print("Removing all package builds...")
+    subprocess.run("bash poetry/remove_builds.sh", shell=True)
 
 
-def load_env_vars():
-    subprocess.run("bash scripts/_load_root_env_variables.sh", shell=True)
+def root_env_vars() -> Dict[str, str | None]:
+    print(f"Loading root env vars in {os.getcwd()}")
+    return dotenv_values(".env")
 
 
 def build_all_packages():
-    print("Building all packages...")
     subprocess.run("bash poetry/build.sh", shell=True)
