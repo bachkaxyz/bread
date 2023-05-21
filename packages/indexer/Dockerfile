@@ -12,3 +12,7 @@ COPY info/requirements.txt /tmp/
 ENV PYTHONPATH=/indexer
 
 RUN python3 -m pip install --pre --no-cache-dir --find-links=/tmp/ -r /tmp/requirements.txt
+
+COPY . ./
+
+RUN chmod +x ./test.sh
