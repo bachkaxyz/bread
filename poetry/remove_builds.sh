@@ -1,6 +1,5 @@
 #!/bin/sh
 # runs the passed command in each poetry project folder
-set -x
 set -u
 set -e
 DIR="$( cd "$( dirname "$0" )" && pwd )"

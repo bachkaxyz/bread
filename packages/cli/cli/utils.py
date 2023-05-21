@@ -6,7 +6,7 @@ def remove_all_package_builds():
 
 
 def load_env_vars():
-    subprocess.run("bash scripts/_load_root_env_vars.sh", shell=True)
+    subprocess.run("bash scripts/_load_root_env_variables.sh", shell=True)
 
 
 def build_all_packages():
