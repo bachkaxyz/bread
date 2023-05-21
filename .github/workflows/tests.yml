@@ -38,6 +38,7 @@ jobs:
               pytest-coverage-path: ./packages/indexer/reports/pytest-coverage.txt
               junitxml-path: ./packages/indexer/reports/pytest.xml
               title: "Indexer Coverage Report"
+              coverage-path-prefix: "packages/indexer"
 
           
   parse:
@@ -63,4 +64,5 @@ jobs:
               pytest-coverage-path: ./packages/parse/reports/pytest-coverage.txt
               junitxml-path: ./packages/parse/reports/pytest.xml
               title: "Parse Coverage Report"
+              coverage-path-prefix: "packages/parse"
                     
