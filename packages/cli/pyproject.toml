@@ -8,6 +8,7 @@ authors = ["Ethan Leifer <ethanleifer@gmail.com>"]
 python = "3.10.*"
 typer = {version = "^0.9.0", extras = ["all"]}
 python-dotenv = "^1.0.0"
+python-on-whales = "^0.60.1"
 
 
 [build-system]
