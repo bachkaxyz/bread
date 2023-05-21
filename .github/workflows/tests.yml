@@ -53,5 +53,9 @@ jobs:
           - name: 'Parse Tests'
             run: python3 packages/cli/cli/main.py test parse
 
-          - name:
-            run: echo $?
+          - name: "Coverage Comment"
+            uses: MishaKav/pytest-coverage-comment@main
+            with:
+              pytest-coverage-path: ./packages/parse/reports/pytest-coverage.txt
+              junitxml-path: ./packages/parse/reports/pytest.xml
+                    

@@ -12,3 +12,5 @@ ENV POETRY_VIRTUALENVS_CREATE=false
 RUN poetry install
 
 COPY . ./
+
+RUN chmod +x ./test.sh
