@@ -10,7 +10,6 @@ app = typer.Typer()
 def indexer():
     remove_all_package_builds()
     build_all_packages()
-    parse()
     docker = DockerClient(compose_files=["packages/indexer/docker-compose.tests.yaml"])
     docker.compose.down(remove_orphans=True)
     try:
