@@ -9,8 +9,7 @@ app = typer.Typer()
 
 
 @app.command()
-def indexer(redeploy: bool = True, prod=False):
-    env = root_env_vars()
+def indexer(redeploy: bool = True, prod: bool = False):
     compose_files: List[ValidPath] = ["packages/indexer/docker-compose.yaml"]
     if not prod:
         compose_files.append("packages/indexer/docker-compose.local.yaml")
@@ -22,3 +21,8 @@ def indexer(redeploy: bool = True, prod=False):
     build_all_packages()
 
     docker.compose.up(detach=True, build=True)
+
+
+@app.command()
+def dagster(redeploy: bool = True, prod: bool = False):
+    compose_files: List[ValidPath] = ["packages/dagster/docker-compose.yaml"]
