@@ -5,7 +5,7 @@ from typing import List, Set, Tuple
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
 from indexer.db import create_tables, drop_tables, upsert_data, get_max_height
-from indexer.parser import Block, Raw, Tx, Log
+from parse import Block, Raw, Tx, Log
 from deepdiff import DeepDiff
 from google.cloud import storage
 from google.cloud.storage import Blob, Client, Bucket
@@ -18,7 +18,7 @@ from indexer.exceptions import ChainDataIsNoneError
 
 # fixtures
 from tests.chain_test import mock_chain, emptyApi, mock_client
-from tests.parser_test import raws, unparsed_raw_data
+from parse.fixtures import *
 
 
 @pytest.fixture

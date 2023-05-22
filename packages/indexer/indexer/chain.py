@@ -4,9 +4,9 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, TypedDict
 from aiohttp import ClientResponse, ClientSession
-from indexer.exceptions import APIResponseError
 import logging
 from aiohttp.client_exceptions import ClientError
+from indexer.exceptions import APIResponseError
 
 ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"

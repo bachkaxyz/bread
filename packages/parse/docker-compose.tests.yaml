@@ -1,0 +1,10 @@
+version: '3'
+services:
+  parse-test:
+    container_name: parse
+    build:
+      dockerfile: Dockerfile
+    image: parser
+    command: ./test.sh
+    volumes:
+      - ./reports:/parse/reports
