@@ -33,6 +33,7 @@ jobs:
             run: python3 packages/cli/cli/main.py test indexer
 
           - name: "Coverage Comment"
+            id: coverageComment
             uses: MishaKav/pytest-coverage-comment@main
             with:
               pytest-coverage-path: ./packages/indexer/reports/pytest-coverage.txt
@@ -70,6 +71,7 @@ jobs:
 
           - name: "Coverage Comment"
             uses: MishaKav/pytest-coverage-comment@main
+            id: coverageComment
             with:
               pytest-coverage-path: ./packages/parse/reports/pytest-coverage.txt
               junitxml-path: ./packages/parse/reports/pytest.xml
