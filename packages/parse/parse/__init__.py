@@ -153,6 +153,7 @@ class Tx:
     gas_wanted: int
     codespace: str
     timestamp: datetime
+    tx: dict  # this contains the raw messages, fee, signatures, auth info, etc
 
     def get_db_params(self):
         """Helper function to get the parameters for the database"""
@@ -174,6 +175,17 @@ class Tx:
 
 
 @dataclass
+class Message:
+    msg_index: int
+    txhash: str
+    type: str
+    attributes: dict
+
+    def get_cols(self):
+        return set(self.attributes.keys())
+
+
+@dataclass
 class Raw:
     """Stores the raw data from the chain and parses it into their dataclasses"""
 
@@ -188,8 +200,12 @@ class Raw:
 
     block: Block | None = None
     txs: List[Tx] = field(default_factory=list)
+
     logs: List[Log] = field(default_factory=list)
     log_columns: set = field(default_factory=set)
+
+    messages: List[Message] = field(default_factory=list)
+    message_columns: set = field(default_factory=set)
 
     def parse_block(self, raw_block: dict):
         """Parse a block from the raw block data
@@ -253,15 +269,25 @@ class Raw:
                         timestamp=datetime.strptime(
                             tx_response["timestamp"], "%Y-%m-%dT%H:%M:%SZ"
                         ),
+                        tx=tx_response["tx"],
                     )
                 )
                 logs = parse_logs(
                     tx_response["raw_log"],
                     tx_response["txhash"],
                 )
+
                 self.logs.extend(logs)
                 for log in logs:
                     self.log_columns = self.log_columns.union(log.get_cols())
+
+                messages = parse_messages(tx_response["tx"], tx_response["txhash"])
+                self.messages.extend(messages)
+                for message in messages:
+                    self.message_columns = self.message_columns.union(
+                        message.get_cols()
+                    )
+
         else:
             raise BlockPrimaryKeyNotDefinedError(
                 "A transactions needs a chain id and height in order to be inserted correctly since this is the primary key"
@@ -289,31 +315,17 @@ class Raw:
         return [log.get_log_db_params() for log in self.logs]
 
 
-# def flatten_msg(msg: dict):
-#     updated_msg = {}
-#     for k, v in msg.items():
-#         if k == "commit":  # this is a reserved word in postgres
-#             k = "_commit"
-#         if isinstance(v, dict):
-#             updated_sub_msg = flatten_msg(v)
-#             for k1, v1 in updated_sub_msg.items():
-#                 updated_msg[f"{k}_{k1}"] = v1
-#         elif isinstance(v, list):
-#             updated_msg[k] = json.dumps(v)
-#         else:
-#             updated_msg[k] = str(v)
-#     return updated_msg
-
-
-# def parse_messages(messages: dict, txhash: str):
-#     msgs = []
-#     msg_cols = set()
-#     for msg_index, msg in enumerate(messages):
-#         msg_dic = flatten_msg(msg)
-
-#         msg_dic = {fix_entry(k): fix_entry(v) for k, v in msg_dic.items()}
-#         msg_dic["txhash"] = txhash
-#         msg_dic["msg_index"] = msg_index
-#         msg_cols.update(msg_dic.keys())
-#         msgs.append(msg_dic)
-#     return msgs, msg_cols
+def parse_messages(tx: dict, txhash: str) -> List[Message]:
+    messages = tx["body"]["messages"]
+    parsed_messages: List[Message] = []
+    for i, msg in enumerate(messages):
+        attributes = {k: v for k, v in msg.items()}
+        attributes.pop("@type")
+        msg = Message(
+            msg_index=i,
+            txhash=txhash,
+            type=msg["@type"],
+            attributes=attributes,
+        )
+        parsed_messages.append(msg)
+    return parsed_messages

@@ -89,6 +89,7 @@ def test_parsing(raws: List[Raw], unparsed_raw_data):
             assert tx.timestamp == datetime.strptime(
                 raw_tx["timestamp"], "%Y-%m-%dT%H:%M:%SZ"
             )
+            assert tx.tx == raw_tx["tx"]
 
 
 def test_parse_tx_before_block_error(raw_tx):
