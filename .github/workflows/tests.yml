@@ -45,7 +45,7 @@ jobs:
           - run: echo ${{ steps.coverageComment.outputs.coverage }}
 
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} == ${{ 0 }} && ${{ steps.coverageComment.outputs.coverage }} < ${{ 85 }}
+            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverageComment.outputs.coverage }} < ${{ 85 }}
             uses: actions/github-script@v3
             with:
               script: |
@@ -82,7 +82,7 @@ jobs:
           - run: echo ${{ steps.coverageComment.outputs.coverage }}
 
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} == ${{ 0 }} && ${{ steps.coverageComment.outputs.coverage }} < ${{ 90 }}
+            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverageComment.outputs.coverage }} < ${{ 90 }}
             uses: actions/github-script@v3
             with:
               script: |
