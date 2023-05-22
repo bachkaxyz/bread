@@ -1,7 +1,8 @@
 import asyncio
 from typing import List
 from indexer.chain import CosmosChain
-from indexer.parser import Raw, process_tx, process_block
+from parse import Raw
+from indexer.process import process_tx, process_block
 from indexer.live import live, get_data_live
 from indexer.db import (
     create_tables,
@@ -17,15 +18,13 @@ from indexer.backfill import (
     backfill_wrong_count,
 )
 from tests.db_test import (
-    raws,
     mock_schema,
     mock_client,
     mock_pool,
-    unparsed_raw_data,
     mock_bucket,
 )
 from tests.chain_test import mock_chain, emptyApi
-
+from parse.fixtures import *
 from asyncpg import Connection, Pool
 from aiohttp import ClientSession
 from google.cloud.storage import Bucket
@@ -525,7 +524,7 @@ async def test_process_tx_incorrect_wrong_input(
 async def test_parse_block_unsuccessfully_parse(
     mock_client: ClientSession, mock_chain: CosmosChain, mocker
 ):
-    mocker.patch("indexer.parser.Raw.parse_block", return_value=None)
+    mocker.patch("parse.Raw.parse_block", return_value=None)
 
     assert await process_block({}, mock_client, mock_chain) == None
 
