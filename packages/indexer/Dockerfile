@@ -1,4 +1,4 @@
-FROM python:3.10 AS indexer-base
+FROM python:3.10 AS indexer
 
 RUN pip install poetry
 
@@ -6,17 +6,13 @@ WORKDIR /indexer
 
 COPY poetry.lock pyproject.toml ./
 
+COPY dist/*.whl /tmp/
+COPY info/requirements.txt /tmp/
 
 ENV PYTHONPATH=/indexer
-ENV POETRY_VIRTUALENVS_CREATE=false
-FROM indexer-base AS indexer-prod
 
-RUN poetry install -vv --no-cache
+RUN python3 -m pip install --pre --no-cache-dir --find-links=/tmp/ -r /tmp/requirements.txt
 
 COPY . ./
 
-FROM indexer-base AS indexer-dev
-
-RUN poetry install --with dev -vv --no-cache
-
-COPY . ./
+RUN chmod +x ./test.sh

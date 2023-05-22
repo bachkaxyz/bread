@@ -1,11 +1,10 @@
 version: '3'
 services:
   api:
-    container_name: sn-api
     build:
       context: .
       dockerfile: Dockerfile
-    image: api-dev
+    image: api
     platform: linux/arm64
     ports:
       - "4000:4000"

@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: indexer-dev
+    image: indexer
     container_name: ${COMPOSE_PREFIX}-indexer
 networks:
   default:
