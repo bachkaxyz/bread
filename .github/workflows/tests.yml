@@ -41,7 +41,7 @@ jobs:
               coverage-path-prefix: "packages/indexer"
           
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} && ${{ steps.coverageComment.outputs.coverage }} > ${{ 85 }}
+            if: ${{ steps.coverageComment.outputs.failures }} == ${{ 0 }} && ${{ steps.coverageComment.outputs.coverage }} < ${{ 85 }}
             uses: actions/github-script@v3
             with:
               script: |
@@ -74,7 +74,7 @@ jobs:
               coverage-path-prefix: "packages/parse"
           
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} && ${{ steps.coverageComment.outputs.coverage }} > ${{ 90 }}
+            if: ${{ steps.coverageComment.outputs.failures }} == ${{ 0 }} && ${{ steps.coverageComment.outputs.coverage }} < ${{ 90 }}
             uses: actions/github-script@v3
             with:
               script: |
