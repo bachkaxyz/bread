@@ -41,10 +41,6 @@ jobs:
               title: "Indexer Coverage Report"
               coverage-path-prefix: "packages/indexer"
           
-          - run: echo ${{ steps.coverageComment.outputs.failures }}
-          - run: echo ${{ steps.coverageComment.outputs.coverage }}
-
-         
           - uses: mad9000/actions-find-and-replace-string@4
             id: coverString
             with:
@@ -52,6 +48,10 @@ jobs:
                 find: '%'
                 replace: ''
 
+          
+          - run: echo ${{ steps.coverageComment.outputs.failures }}
+          - run: echo ${{ steps.coverString.outputs.value }}
+          
           - name: "Fail?"
             if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverString.outputs.value }} < ${{ 85 }}
             uses: actions/github-script@v3
@@ -84,16 +84,18 @@ jobs:
               junitxml-path: ./packages/parse/reports/pytest.xml
               title: "Parse Coverage Report"
               coverage-path-prefix: "packages/parse"
+            
           
-          - run: echo ${{ steps.coverageComment.outputs.failures }}
-          - run: echo ${{ steps.coverageComment.outputs.coverage }}
-
           - uses: mad9000/actions-find-and-replace-string@4
             id: coverString
             with:
                 source: ${{ steps.coverageComment.outputs.coverage }}
                 find: '%'
                 replace: ''
+
+          
+          - run: echo ${{ steps.coverageComment.outputs.failures }}
+          - run: echo ${{ steps.coverString.outputs.value }}
 
           - name: "Fail?"
             if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverString.outputs.value }} < ${{ 90 }}
