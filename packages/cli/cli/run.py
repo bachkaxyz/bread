@@ -86,11 +86,11 @@ def api(prod: bool = False):
 
 
 @app.command()
-def dashboard(prod=False):
+def dashboard(prod: bool = False):
     compose_files: List[ValidPath] = []
+    compose_files.append("packages/dashboard/docker-compose.yaml")
     if not prod:
         compose_files.append("packages/dashboard/docker-compose.local.yaml")
-    compose_files.append("packages/dashboard/docker-compose.yaml")
     env = root_env_vars()
     docker = DockerClient(
         compose_files=compose_files,
