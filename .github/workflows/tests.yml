@@ -53,11 +53,13 @@ jobs:
           - run: echo ${{ steps.coverString.outputs.value }}
 
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverString.outputs.value }} < ${{ 85 }}
+            if: ${{always()}}
             uses: actions/github-script@v3
             with:
               script: |
-                  core.setFailed('Coverage not correct!')
+                  if ( ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || Number(${{ steps.coverString.outputs.value }}) < ${{ 85 }} ) {
+                    core.setFailed('Coverage not correct!')
+                  }
           
   parse:
       runs-on: ubuntu-latest
@@ -96,10 +98,13 @@ jobs:
           
           - run: echo ${{ steps.coverageComment.outputs.failures }}
           - run: echo ${{ steps.coverString.outputs.value }}
+          
 
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverString.outputs.value }} < ${{ 90 }}
+            if: ${{always()}}
             uses: actions/github-script@v3
             with:
               script: |
-                  core.setFailed('Coverage not correct!')
+                  if ( ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || Number(${{ steps.coverString.outputs.value }}) < ${{ 85 }} ) {
+                    core.setFailed('Coverage not correct!')
+                  }
