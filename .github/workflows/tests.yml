@@ -44,13 +44,20 @@ jobs:
           - run: echo ${{ steps.coverageComment.outputs.failures }}
           - run: echo ${{ steps.coverageComment.outputs.coverage }}
 
+         
+          - uses: mad9000/actions-find-and-replace-string@4
+            id: coverString
+            with:
+                source: ${{ steps.coverageComment.outputs.coverage }}
+                find: '%'
+                replace: ''
+
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverageComment.outputs.coverage }} < ${{ 85 }}
+            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverString.outputs.value }} < ${{ 85 }}
             uses: actions/github-script@v3
             with:
               script: |
                   core.setFailed('Coverage not correct!')
-
           
   parse:
       runs-on: ubuntu-latest
@@ -81,8 +88,15 @@ jobs:
           - run: echo ${{ steps.coverageComment.outputs.failures }}
           - run: echo ${{ steps.coverageComment.outputs.coverage }}
 
+          - uses: mad9000/actions-find-and-replace-string@4
+            id: coverString
+            with:
+                source: ${{ steps.coverageComment.outputs.coverage }}
+                find: '%'
+                replace: ''
+
           - name: "Fail?"
-            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverageComment.outputs.coverage }} < ${{ 90 }}
+            if: ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || ${{ steps.coverString.outputs.value }} < ${{ 90 }}
             uses: actions/github-script@v3
             with:
               script: |
