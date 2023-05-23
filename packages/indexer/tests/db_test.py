@@ -107,7 +107,7 @@ async def test_upsert_data(
 
         log_columns_results = await conn.fetch("select * from log_columns")
 
-        msg_results = await conn.fetch("select * from msgs")
+        msg_results = await conn.fetch("select * from messages")
 
         msg_columns_results = await conn.fetch("select * from msg_columns")
 
@@ -151,10 +151,10 @@ async def test_upsert_data(
             gas_wanted=res_tx["gas_wanted"],
             codespace=res_tx["codespace"],
             timestamp=res_tx["timestamp"],
-            tx=res_tx["tx"],
+            tx=json.loads(res_tx["tx"]),
         )
 
-        keys = "txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp".split(
+        keys = "txhash, chain_id, height, code, data, info, logs, events, raw_log, tx, gas_used, gas_wanted, codespace, timestamp".split(
             ", "
         )
         for k, b, r in zip(keys, tx.get_db_params(), res_tx_parsed.get_db_params()):
@@ -168,7 +168,7 @@ async def test_upsert_data(
     logs: List[Log] = []
     [logs.extend(raw.logs) for raw in raws]
     for log, res_log in zip(
-        sorted(logs, key=lambda x: (x.txhash, x.msg_index)),
+        sorted(logs, key=lambda x: (x.txhash, int(x.msg_index))),
         sorted(log_results, key=lambda x: (x["txhash"], int(x["msg_index"]))),
     ):
         parsed = json.loads(res_log["parsed"])
