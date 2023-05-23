@@ -16,7 +16,7 @@ class Log:
     txhash: str
     failed_msg: str | None = None
     failed: bool = False
-    msg_index: int = 0
+    msg_index: str = "0"
     event_attributes = defaultdict(list)
 
     def get_cols(self) -> Set[Tuple[str, str]]:
@@ -71,7 +71,7 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
         return [Log(txhash, failed=True, failed_msg=raw_logs)]
 
     for msg_index, raw_log in enumerate(json_raw_logs):  # for each message
-        log = Log(txhash=txhash, msg_index=msg_index)
+        log = Log(txhash=txhash, msg_index=str(msg_index))
         log.event_attributes = defaultdict(list)
         # for each event in the message
         for i, event in enumerate(raw_log["events"]):
@@ -167,6 +167,7 @@ class Tx:
             json.dumps(self.logs),
             json.dumps(self.events),
             self.raw_log,
+            json.dumps(self.tx),
             self.gas_used,
             self.gas_wanted,
             self.codespace,
@@ -176,13 +177,21 @@ class Tx:
 
 @dataclass
 class Message:
-    msg_index: int
     txhash: str
     type: str
-    attributes: dict
+    attributes: Dict[str, str]
+    msg_index: str = "0"
 
-    def get_cols(self):
+    def get_cols(self) -> Set[str]:
         return set(self.attributes.keys())
+
+    def get_message_db_params(self) -> Tuple[str, str, str, str]:
+        return (
+            self.txhash,
+            str(self.msg_index),
+            self.type,
+            json.dumps(self.attributes),
+        )
 
 
 @dataclass
@@ -314,15 +323,23 @@ class Raw:
         """Helper function to get the parameters for the database"""
         return [log.get_log_db_params() for log in self.logs]
 
+    def get_msg_columns_db_params(self):
+        """Helper function to get the parameters for the database"""
+        return [[i] for i in self.message_columns]
+
+    def get_messages_db_params(self):
+        """Helper function to get the parameters for the database"""
+        return [log.get_message_db_params() for log in self.messages]
+
 
 def parse_messages(tx: dict, txhash: str) -> List[Message]:
-    messages = tx["body"]["messages"]
+    messages: List[Dict[str, str]] = tx["body"]["messages"]
     parsed_messages: List[Message] = []
     for i, msg in enumerate(messages):
         attributes = {k: v for k, v in msg.items()}
         attributes.pop("@type")
         msg = Message(
-            msg_index=i,
+            msg_index=str(i),
             txhash=txhash,
             type=msg["@type"],
             attributes=attributes,

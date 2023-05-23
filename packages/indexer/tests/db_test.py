@@ -62,7 +62,15 @@ async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
     async with mock_pool.acquire() as conn:
         await create_tables(conn, mock_schema)
 
-    table_names = ("raw", "blocks", "txs", "logs", "log_columns")
+    table_names = (
+        "raw",
+        "blocks",
+        "txs",
+        "logs",
+        "log_columns",
+        "messages",
+        "msg_columns",
+    )
 
     assert await check_tables(table_names) == len(table_names)
 
@@ -98,6 +106,10 @@ async def test_upsert_data(
         log_results = await conn.fetch("select * from logs")
 
         log_columns_results = await conn.fetch("select * from log_columns")
+
+        msg_results = await conn.fetch("select * from msgs")
+
+        msg_columns_results = await conn.fetch("select * from msg_columns")
 
     for raw, res in zip(raws, raw_results):
         assert raw.chain_id == res["chain_id"]
@@ -139,6 +151,7 @@ async def test_upsert_data(
             gas_wanted=res_tx["gas_wanted"],
             codespace=res_tx["codespace"],
             timestamp=res_tx["timestamp"],
+            tx=res_tx["tx"],
         )
 
         keys = "txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp".split(

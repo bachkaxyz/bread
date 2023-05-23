@@ -42,7 +42,7 @@ def test_parse_tx_logs(log_data):
 def test_parse_tx_log_error():
     logs = parse_logs("invalid json", "test_txhash")
     assert logs == [
-        Log(txhash="test_txhash", failed_msg="invalid json", failed=True, msg_index=0)
+        Log(txhash="test_txhash", failed_msg="invalid json", failed=True, msg_index="0")
     ]
 
 
