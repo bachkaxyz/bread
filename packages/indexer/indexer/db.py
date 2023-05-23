@@ -69,7 +69,7 @@ async def create_tables(conn: Connection, schema: str):
         # our schema in .sql files is defined as $schema so we replace it with the actual schema name
         await conn.execute(f.read().replace("$schema", schema))
 
-    file_path = os.path.join(cur_dir, "sql/log_triggers.sql")
+    file_path = os.path.join(cur_dir, "sql/triggers.sql")
     with open(file_path, "r") as f:
         await conn.execute(f.read().replace("$schema", schema))
 
@@ -114,27 +114,34 @@ async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
     if raw.height is not None and raw.chain_id is not None:
         async with pool.acquire() as conn:
             async with pool.acquire() as conn2:
-                conn: Connection
-                conn2: Connection
-                # we do all the upserts in a transaction so that if one fails, all of them fail
-                await insert_raw(conn, raw)
+                async with pool.acquire() as conn3:
+                    async with pool.acquire() as conn4:
+                        conn: Connection
+                        conn2: Connection
+                        conn3: Connection
+                        conn4: Connection
+                        await insert_raw(conn, raw)
 
-                tasks = []
-                # we are checking if the block is not None because we might only have the tx data and not the block data
-                if raw.block is not None:
-                    tasks.append(insert_block(conn2, raw))
-                if raw.txs:
-                    tasks.append(insert_many_txs(conn, raw))
-                await asyncio.gather(*tasks)
+                        tasks = []
+                        # we are checking if the block is not None because we might only have the tx data and not the block data
+                        if raw.block is not None:
+                            tasks.append(insert_block(conn2, raw))
+                        if raw.txs:
+                            tasks.append(insert_many_txs(conn, raw))
+                        await asyncio.gather(*tasks)
 
-                await asyncio.gather(
-                    insert_many_log_columns(conn2, raw), insert_many_logs(conn, raw)
-                )
+                        print(raw.message_columns)
+                        await asyncio.gather(
+                            insert_many_logs(conn, raw),
+                            insert_many_log_columns(conn2, raw),
+                            insert_many_messages(conn3, raw),
+                            insert_many_msg_columns(conn4, raw),
+                        )
 
-            logger.info(f"{raw.height=} inserted")
-            upsert_end_time = time.time()
-            upsert_times.append(upsert_end_time - upsert_start_time)
-            return True
+        logger.info(f"{raw.height=} inserted")
+        upsert_end_time = time.time()
+        upsert_times.append(upsert_end_time - upsert_start_time)
+        return True
 
     else:
         logger.info(f"{raw.height} {raw.chain_id} is None")
@@ -144,11 +151,11 @@ async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
 async def insert_raw(conn: Connection, raw: Raw):
     await conn.execute(
         f"""
-                        INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
-                        VALUES ($1, $2, $3, $4)
-                        ON CONFLICT ON CONSTRAINT raw_pkey
-                        DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
-                        """,
+        INSERT INTO raw(chain_id, height, block_tx_count, tx_tx_count)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT ON CONSTRAINT raw_pkey
+        DO UPDATE SET tx_tx_count = EXCLUDED.tx_tx_count;
+        """,
         *raw.get_raw_db_params(),
     )
 
@@ -186,9 +193,9 @@ async def insert_block(conn: Connection, raw: Raw):
     if raw.block:
         await conn.execute(
             """
-                    INSERT INTO blocks(chain_id, height, time, block_hash, proposer_address)
-                    VALUES ($1, $2, $3, $4, $5);
-                    """,
+            INSERT INTO blocks(chain_id, height, time, block_hash, proposer_address)
+            VALUES ($1, $2, $3, $4, $5);
+            """,
             *raw.block.get_db_params(),
         )
     else:
@@ -198,11 +205,11 @@ async def insert_block(conn: Connection, raw: Raw):
 async def insert_many_txs(conn: Connection, raw: Raw):
     await conn.executemany(
         """
-                INSERT INTO txs(txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp)
-                VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
-                )
-                """,
+        INSERT INTO txs(txhash, chain_id, height, code, data, info, logs, events, raw_log, tx, gas_used, gas_wanted, codespace, timestamp)
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+        )
+        """,
         raw.get_txs_db_params(),
     )
 
@@ -210,23 +217,46 @@ async def insert_many_txs(conn: Connection, raw: Raw):
 async def insert_many_log_columns(conn: Connection, raw: Raw):
     await conn.executemany(
         f"""
-                INSERT INTO log_columns (event, attribute)
-                VALUES ($1, $2)
-                ON CONFLICT DO NOTHING
-                """,
+        INSERT INTO log_columns (event, attribute)
+        VALUES ($1, $2)
+        ON CONFLICT DO NOTHING
+        """,
         raw.get_log_columns_db_params(),
+    )
+
+
+async def insert_many_msg_columns(conn: Connection, raw: Raw):
+    await conn.executemany(
+        f"""
+        INSERT INTO msg_columns (attribute)
+        VALUES ($1)
+        ON CONFLICT DO NOTHING
+        """,
+        raw.get_msg_columns_db_params(),
     )
 
 
 async def insert_many_logs(conn: Connection, raw: Raw):
     await conn.executemany(
         f"""
-                INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
-                VALUES (
-                    $1, $2, $3, $4, $5
-                )
-                """,
+        INSERT INTO logs (txhash, msg_index, parsed, failed, failed_msg)
+        VALUES (
+            $1, $2, $3, $4, $5
+        )
+        """,
         raw.get_logs_db_params(),
+    )
+
+
+async def insert_many_messages(conn: Connection, raw: Raw):
+    await conn.executemany(
+        f"""
+        INSERT INTO messages (txhash, msg_index, type, parsed)
+        VALUES (
+            $1, $2, $3, $4
+        )
+        """,
+        raw.get_messages_db_params(),
     )
 
 
