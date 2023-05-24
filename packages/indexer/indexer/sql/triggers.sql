@@ -57,7 +57,8 @@ as
 $$
 language plpgsql
 ;
-CREATE OR REPLACE TRIGGER msg_columns_change
+DROP TRIGGER IF EXISTS msg_columns_change ON $schema.msg_columns;
+CREATE TRIGGER msg_columns_change
 AFTER UPDATE
 ON $schema.msg_columns
 FOR EACH ROW EXECUTE PROCEDURE on_msg_column_change();
