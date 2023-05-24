@@ -16,7 +16,7 @@ from indexer.db import (
 from parse import Raw
 from indexer.process import process_tx, process_block
 import logging
-from google.cloud.storage import Bucket
+from gcloud.aio.storage import Bucket
 
 min_block_height = 116001
 
