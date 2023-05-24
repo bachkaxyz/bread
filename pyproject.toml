@@ -12,6 +12,7 @@ indexer = { path = "./packages/indexer", develop = true, extras = ["dev"] }
 dags = { path = "./packages/dags", develop = true, extras = ["dev"] }
 cli = { path = "./packages/cli", develop = true, extras = ["dev"] }
 parse = { path = "./packages/parse", develop = true, extras = ["dev"] }
+load_backup = { path = "./packages/load_backup", develop = true, extras = ["dev"] }
 black = "^22.12.0"
 shandy-sqlfmt = {version = "^0.17.1", extras = ["jinjafmt"]}
 
