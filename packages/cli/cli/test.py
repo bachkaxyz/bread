@@ -7,14 +7,20 @@ app = typer.Typer()
 
 
 @app.command()
-def indexer(build: bool = True, open_shell: bool = False):
-    if build:
+def indexer(
+    build_packages: bool = True, build_docker: bool = True, open_shell: bool = False
+):
+    if build_packages:
         remove_all_package_builds()
         build_all_packages()
     docker = DockerClient(compose_files=["packages/indexer/docker-compose.tests.yaml"])
     docker.compose.down(remove_orphans=True)
     try:
         if open_shell:
+            if build_docker:
+                docker.compose.build(
+                    ["indexer-test"],
+                )
             docker.compose.run(
                 "indexer-test",
                 command=["bash"],
@@ -22,7 +28,7 @@ def indexer(build: bool = True, open_shell: bool = False):
                 remove=True,
             )
         else:
-            docker.compose.up(build=build, abort_on_container_exit=True)
+            docker.compose.up(build=build_docker, abort_on_container_exit=True)
     except:
         pass
 

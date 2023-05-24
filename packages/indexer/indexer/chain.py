@@ -63,7 +63,7 @@ class CosmosChain(metaclass=Singleton):
 
     def get_next_api(self) -> str:
         """Get the next api to hit"""
-        if len(self.apis) == 1:
+        if len(self.apis.values()) == 1:
             return list(self.apis.keys())[0]
         return list(self.apis.keys())[self.current_api_index]
 
@@ -194,10 +194,11 @@ class CosmosChain(metaclass=Singleton):
         if data is None or api is None:
             return None
 
-        if self.chain_id == data["block"]["header"]["chain_id"]:
-            return data
-
-        self.remove_api(api)
+        try:
+            if self.chain_id == data["block"]["header"]["chain_id"]:
+                return data
+        except:
+            return None
         return None
 
     async def get_block_txs(

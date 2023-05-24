@@ -11,7 +11,7 @@ from indexer.chain import CosmosChain
 from indexer.exceptions import ChainDataIsNoneError
 from parse import Raw
 import logging
-from google.cloud.storage import Blob, Client, Bucket
+from gcloud.aio.storage import Bucket, Storage, Blob
 
 # timing
 blob_upload_times = []
@@ -79,20 +79,16 @@ async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket, chain: CosmosChain):
     tasks: List[Coroutine[Any, Any, bool]] = [upsert_data_to_db(pool, raw)]
     if raw.height and raw.raw_block:
         # tasks.append(
-        await run_insert_into_gcs(
-            bucket,
-            f"{chain.chain_registry_name}/{raw.chain_id}/blocks/{raw.height}.json",
-            raw.raw_block,
+        blob_url = (
+            f"{chain.chain_registry_name}/{raw.chain_id}/blocks/{raw.height}.json"
         )
+
+        await insert_json_into_gcs(bucket.new_blob(blob_url), raw.raw_block)
         # )
     if raw.height and raw.raw_tx:
-        tasks.append(
-            run_insert_into_gcs(
-                bucket,
-                f"{chain.chain_registry_name}/{raw.chain_id}/txs/{raw.height}.json",
-                raw.raw_tx,
-            )
-        )
+        blob_url = f"{chain.chain_registry_name}/{raw.chain_id}/txs/{raw.height}.json"
+
+        await insert_json_into_gcs(bucket.new_blob(blob_url), raw.raw_tx)
     results = await asyncio.gather(*tasks)
     return all(results)
 
@@ -160,22 +156,15 @@ async def insert_raw(conn: Connection, raw: Raw):
     )
 
 
-async def run_insert_into_gcs(
-    bucket: Bucket, blob_url: str, data: dict | list, max_retries: int = 5
+async def insert_json_into_gcs(
+    blob: Blob, data: dict | list, max_retries: int = 5
 ) -> bool:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None, insert_json_into_gcs, bucket.blob(blob_url), data, max_retries
-    )
-
-
-def insert_json_into_gcs(blob: Blob, data: dict | list, max_retries: int = 5) -> bool:
     global blob_upload_times
     start_time = time.time()
     retries = 0
     while retries < max_retries:
         try:
-            blob.upload_from_string(json.dumps(data))
+            await blob.upload(json.dumps(data))
             finish_time = time.time()
             blob_upload_times.append(finish_time - start_time)
             return True
