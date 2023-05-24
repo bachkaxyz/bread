@@ -13,8 +13,7 @@ from indexer.backfill import backfill_historical, backfill_wrong_count
 from indexer.chain import get_chain_from_environment, CosmosChain
 from indexer.db import create_tables, drop_tables
 from indexer.live import live
-from google.cloud.storage import Client, Bucket
-
+from gcloud.aio.storage import Bucket, Storage
 from logging import Logger
 
 
@@ -95,7 +94,7 @@ async def main():
             # start indexer
             chain = await get_chain_from_environment(session)
             BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
-            storage_client = Client()
+            storage_client = Storage()
             bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
 
             exceptions = await asyncio.gather(

@@ -5,10 +5,10 @@ from typing import List, Set, Tuple
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
 from indexer.db import create_tables, drop_tables, upsert_data, get_max_height
+from pytest_mock import MockerFixture
 from parse import Block, Raw, Tx, Log
 from deepdiff import DeepDiff
-from google.cloud import storage
-from google.cloud.storage import Blob, Client, Bucket
+from gcloud.aio.storage import Bucket, Storage
 
 import pytest
 from asyncpg import Connection, Pool, create_pool
@@ -17,7 +17,7 @@ from indexer.db import missing_blocks_cursor, insert_block, insert_json_into_gcs
 from indexer.exceptions import ChainDataIsNoneError
 
 # fixtures
-from tests.chain_test import mock_chain, emptyApi, mock_client
+from tests.chain_test import mock_chain, emptyApi
 from parse.fixtures import *
 
 
@@ -40,11 +40,14 @@ async def mock_pool(mock_schema):
 
 
 @pytest.fixture
-def mock_bucket():
-    BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
-    storage_client = storage.Client()
-    bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
-    return bucket
+async def storage_config():
+    session = ClientSession()
+    storage = Storage(session=session)
+    BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer-test")
+    bucket = storage.get_bucket(BUCKET_NAME)  # your bucket name
+    yield session, storage, bucket
+
+    await session.close()
 
 
 async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
@@ -62,7 +65,15 @@ async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
     async with mock_pool.acquire() as conn:
         await create_tables(conn, mock_schema)
 
-    table_names = ("raw", "blocks", "txs", "logs", "log_columns")
+    table_names = (
+        "raw",
+        "blocks",
+        "txs",
+        "logs",
+        "log_columns",
+        "messages",
+        "msg_columns",
+    )
 
     assert await check_tables(table_names) == len(table_names)
 
@@ -76,17 +87,17 @@ async def test_upsert_data(
     mock_pool: Pool,
     mock_schema: str,
     mock_chain: CosmosChain,
-    mock_client: ClientSession,
-    mock_bucket: Bucket,
+    storage_config: Tuple[ClientSession, Storage, Bucket],
     raws: List[Raw],
 ):
+    storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
         conn: Connection
         await drop_tables(conn, mock_schema)
         await create_tables(conn, mock_schema)
 
         await asyncio.gather(
-            *[upsert_data(mock_pool, raw, mock_bucket, mock_chain) for raw in raws]
+            *[upsert_data(mock_pool, raw, bucket, mock_chain) for raw in raws]
         )
 
         raw_results = await conn.fetch("select * from raw order by height asc")
@@ -98,6 +109,10 @@ async def test_upsert_data(
         log_results = await conn.fetch("select * from logs")
 
         log_columns_results = await conn.fetch("select * from log_columns")
+
+        msg_results = await conn.fetch("select * from messages")
+
+        msg_columns_results = await conn.fetch("select * from msg_columns")
 
     for raw, res in zip(raws, raw_results):
         assert raw.chain_id == res["chain_id"]
@@ -139,9 +154,10 @@ async def test_upsert_data(
             gas_wanted=res_tx["gas_wanted"],
             codespace=res_tx["codespace"],
             timestamp=res_tx["timestamp"],
+            tx=json.loads(res_tx["tx"]),
         )
 
-        keys = "txhash, chain_id, height, code, data, info, logs, events, raw_log, gas_used, gas_wanted, codespace, timestamp".split(
+        keys = "txhash, chain_id, height, code, data, info, logs, events, raw_log, tx, gas_used, gas_wanted, codespace, timestamp".split(
             ", "
         )
         for k, b, r in zip(keys, tx.get_db_params(), res_tx_parsed.get_db_params()):
@@ -155,7 +171,7 @@ async def test_upsert_data(
     logs: List[Log] = []
     [logs.extend(raw.logs) for raw in raws]
     for log, res_log in zip(
-        sorted(logs, key=lambda x: (x.txhash, x.msg_index)),
+        sorted(logs, key=lambda x: (x.txhash, int(x.msg_index))),
         sorted(log_results, key=lambda x: (x["txhash"], int(x["msg_index"]))),
     ):
         parsed = json.loads(res_log["parsed"])
@@ -189,15 +205,16 @@ async def test_get_missing_blocks(
     mock_pool: Pool,
     mock_schema: str,
     mock_chain: CosmosChain,
-    mock_bucket: Bucket,
+    storage_config: Tuple[ClientSession, Storage, Bucket],
 ):
+    storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
         conn: Connection
         await drop_tables(conn, mock_schema)
         await create_tables(conn, mock_schema)
 
         await asyncio.gather(
-            *[upsert_data(mock_pool, raw, mock_bucket, mock_chain) for raw in raws]
+            *[upsert_data(mock_pool, raw, bucket, mock_chain) for raw in raws]
         )
 
         mock_chain.chain_id = "jackal-1"
@@ -214,12 +231,16 @@ async def test_get_missing_blocks(
 
 
 async def test_invalid_upsert_data(
-    mock_pool: Pool, mock_schema: str, mock_bucket: Bucket, mock_chain: CosmosChain
+    mock_pool: Pool,
+    mock_schema: str,
+    storage_config: Tuple[ClientSession, Storage, Bucket],
+    mock_chain: CosmosChain,
 ):
+    storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
         await drop_tables(conn, mock_schema)
     raw = Raw()
-    assert False == await upsert_data(mock_pool, raw, mock_bucket, mock_chain)
+    assert False == await upsert_data(mock_pool, raw, bucket, mock_chain)
 
     with pytest.raises(ChainDataIsNoneError):
         async with mock_pool.acquire() as conn:
@@ -229,12 +250,11 @@ async def test_invalid_upsert_data(
 async def test_db_max_height(
     raws: List[Raw],
     mock_schema: str,
-    mock_client: ClientSession,
     mock_chain: CosmosChain,
     mock_pool: Pool,
-    mocker,
-    mock_bucket: Bucket,
+    storage_config: Tuple[ClientSession, Storage, Bucket],
 ):
+    mock_bucket = storage_config[2]
     raw = raws[0]
     if raw and raw.chain_id:
         async with mock_pool.acquire() as conn:
@@ -259,23 +279,30 @@ async def test_no_db_max_height(
         assert 0 == await get_max_height(conn, mock_chain)
 
 
-def test_insert_block_into_gcs(raws: List[Raw], mock_bucket: Bucket):
-    blob = mock_bucket.blob("test")
+async def test_insert_block_into_gcs(
+    raws: List[Raw],
+    storage_config: Tuple[ClientSession, Storage, Bucket],
+):
+    session, storage, bucket = storage_config
+    blob = bucket.new_blob("test")
     raw = raws[0]
     if raw.raw_block:
-        assert True == insert_json_into_gcs(blob, raw.raw_block)
+        assert True == await insert_json_into_gcs(blob, raw.raw_block)
 
-    res_blob = mock_bucket.get_blob("test")
+    res_blob = await bucket.get_blob("test")
     if res_blob:
-        assert json.dumps(raw.raw_block) == res_blob.download_as_bytes().decode("utf-8")
-        res_blob.delete()
+        down = (await res_blob.download()).decode("utf-8")
+        assert json.dumps(raw.raw_block) == down
+        await storage.delete(bucket=bucket.name, object_name=res_blob.name)
 
 
-def test_insert_block_into_gcs_error(raws: List[Raw], mock_bucket: Bucket, mocker):
-    blob = mock_bucket.blob("test")
+async def test_insert_into_gcs_error(
+    storage_config: Tuple[ClientSession, Storage, Bucket], mocker: MockerFixture
+):
+    session, storage, bucket = storage_config
+    blob = bucket.new_blob("test")
     mocker.patch(
-        "google.cloud.storage.blob.Blob.upload_from_string", side_effect=Exception
+        "gcloud.aio.storage.blob.Blob.upload", side_effect=Exception("test error")
     )
-    raw = raws[0]
-    if raw.raw_block:
-        assert False == insert_json_into_gcs(blob, raw.raw_block)
+
+    assert False == await insert_json_into_gcs(blob, {"test": "test"})

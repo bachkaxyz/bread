@@ -1,3 +1,4 @@
+import os
 import subprocess
 from typing import List
 from cli.utils import build_all_packages, remove_all_package_builds, root_env_vars
@@ -9,11 +10,24 @@ app = typer.Typer()
 
 
 @app.command()
-def indexer(redeploy: bool = True, prod: bool = False):
+def indexer(
+    redeploy: bool = True,
+    prod: bool = False,
+    build_docker: bool = True,
+    build_packages: bool = True,
+    open_shell: bool = False,
+):
     compose_files: List[ValidPath] = ["packages/indexer/docker-compose.yaml"]
     env = root_env_vars()
     if not prod:
         compose_files.append("packages/indexer/docker-compose.local.yaml")
+
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
+        env["GOOGLE_APPLICATION_CREDENTIALS"]
+        if env["GOOGLE_APPLICATION_CREDENTIALS"]
+        else ""
+    )
+    print(os.environ["GOOGLE_APPLICATION_CREDENTIALS"])
     docker = DockerClient(
         compose_files=compose_files,
         compose_env_file=".env",
@@ -24,11 +38,19 @@ def indexer(redeploy: bool = True, prod: bool = False):
 
     if redeploy:
         docker.compose.down(remove_orphans=True)
+    if build_packages or redeploy:
         remove_all_package_builds()
-    build_all_packages()
+        build_all_packages()
 
     try:
-        docker.compose.up(detach=True, build=True)
+        if open_shell:
+            if build_docker:
+                docker.compose.build(
+                    ["indexer"],
+                )
+            docker.compose.run("indexer", command=["bash"], tty=True, remove=True)
+        else:
+            docker.compose.up(detach=True, build=build_docker)
     except:
         raise typer.Exit(code=1)
 
