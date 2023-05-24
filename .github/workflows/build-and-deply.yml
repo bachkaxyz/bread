@@ -11,140 +11,148 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: GitHub Environment Variables Action
-      uses: FranzDiebold/github-env-vars-action@v2.7.0
+      - name: GitHub Environment Variables Action
+        uses: FranzDiebold/github-env-vars-action@v2.7.0
 
-    - id: 'auth'
-      name: 'Authenticate to Google Cloud'
-      uses: 'google-github-actions/auth@v1'
-      with:
-        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
-        export_environment_variables: true
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v1"
+        with:
+          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
+          export_environment_variables: true
 
-    - name: Configure Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1.1.0
+      - name: Configure Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1.1.0
 
-    - name: Authorize Docker push
-      run: gcloud auth configure-docker
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker
 
-    - name: Build and push Docker image
-      env:
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:latest'
-      run: |
-        docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile --target api-prod
-        docker push $IMAGE_TAG
+      - name: Build and push Docker image
+        env:
+          IMAGE_TAG: "gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:latest"
+        run: |
+          docker build -t $IMAGE_TAG ./packages/api -f ./packages/api/Dockerfile --target api-prod
+          docker push $IMAGE_TAG
 
-    - name: Update Cloud Run service
-      env:
-        SERVICE_NAME: ${{ env.CI_ACTION_REF_NAME }}-api
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:latest'
-      run: |
-        gcloud run services update $SERVICE_NAME \
-          --platform managed \
-          --region us-east1 \
-          --image $IMAGE_TAG
-
+      - name: Update Cloud Run service
+        env:
+          SERVICE_NAME: ${{ env.CI_ACTION_REF_NAME }}-api
+          IMAGE_TAG: "gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-api:latest"
+        run: |
+          gcloud run services update $SERVICE_NAME \
+            --platform managed \
+            --region us-east1 \
+            --image $IMAGE_TAG
 
   dashboard:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: GitHub Environment Variables Action
-      uses: FranzDiebold/github-env-vars-action@v2.7.0
+      - name: GitHub Environment Variables Action
+        uses: FranzDiebold/github-env-vars-action@v2.7.0
 
-    - id: 'auth'
-      name: 'Authenticate to Google Cloud'
-      uses: 'google-github-actions/auth@v1'
-      with:
-        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
-        export_environment_variables: true
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v1"
+        with:
+          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
+          export_environment_variables: true
 
-    - name: Configure Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1.1.0
+      - name: Configure Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1.1.0
 
-    - name: Authorize Docker push
-      run: gcloud auth configure-docker
-      
-    - name: Build and push Docker image
-      env:
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest'
-      run: |
-        docker build -t $IMAGE_TAG ./packages/dashboard -f ./packages/dashboard/Dockerfile --target dashboard-prod
-        docker push $IMAGE_TAG
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker
 
-    - name: Update Cloud Run service
-      env:
-        SERVICE_NAME: ${{ env.CI_ACTION_REF_NAME }}-dashboard
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest'
-      run: |
-        gcloud run services update $SERVICE_NAME \
-          --platform managed \
-          --region us-east1 \
-          --image $IMAGE_TAG
+      - name: Build and push Docker image
+        env:
+          IMAGE_TAG: "gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest"
+        run: |
+          docker build -t $IMAGE_TAG ./packages/dashboard -f ./packages/dashboard/Dockerfile --target dashboard
+          docker push $IMAGE_TAG
+
+      - name: Update Cloud Run service
+        env:
+          SERVICE_NAME: ${{ env.CI_ACTION_REF_NAME }}-dashboard
+          IMAGE_TAG: "gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dashboard:latest"
+        run: |
+          gcloud run services update $SERVICE_NAME \
+            --platform managed \
+            --region us-east1 \
+            --image $IMAGE_TAG
 
   indexer:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: GitHub Environment Variables Action
-      uses: FranzDiebold/github-env-vars-action@v2.7.0
+      - name: GitHub Environment Variables Action
+        uses: FranzDiebold/github-env-vars-action@v2.7.0
 
-    - id: 'auth'
-      name: 'Authenticate to Google Cloud'
-      uses: 'google-github-actions/auth@v1'
-      with:
-        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
-        export_environment_variables: true
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v1"
+        with:
+          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
+          export_environment_variables: true
 
-    - name: Configure Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1.1.0
+      - name: Configure Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1.1.0
 
-    - name: Authorize Docker push
-      run: gcloud auth configure-docker
-    
-    - name: Build and push Docker image
-      env:
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-indexer:latest'
-      run: |
-        docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target indexer-prod
-        docker push $IMAGE_TAG
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - run: pip install poetry && cd packages/cli && POETRY_VIRTUALENVS_CREATE=false poetry install && cd ../..
+
+      - name: "Build Deps"
+        run: python3 packages/cli/main.py build
+
+      - name: Build and push Docker image
+        env:
+          IMAGE_TAG: "gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-indexer:latest"
+        run: |
+          docker build -t $IMAGE_TAG ./packages/indexer -f ./packages/indexer/Dockerfile --target indexer
+          docker push $IMAGE_TAG
 
   dagster:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: GitHub Environment Variables Action
-      uses: FranzDiebold/github-env-vars-action@v2.7.0
+      - name: GitHub Environment Variables Action
+        uses: FranzDiebold/github-env-vars-action@v2.7.0
 
-    - id: 'auth'
-      name: 'Authenticate to Google Cloud'
-      uses: 'google-github-actions/auth@v1'
-      with:
-        credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
-        export_environment_variables: true
+      - id: "auth"
+        name: "Authenticate to Google Cloud"
+        uses: "google-github-actions/auth@v1"
+        with:
+          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
+          export_environment_variables: true
 
-    - name: Configure Google Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1.1.0
+      - name: Configure Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1.1.0
 
-    - name: Authorize Docker push
-      run: gcloud auth configure-docker
-    
-    - name: Build and push Docker image
-      env:
-        IMAGE_TAG: 'gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dagster:latest'
-      run: |
-        docker build -t $IMAGE_TAG ./packages/dags -f ./packages/dags/Dockerfile --target dagster-base
-        docker push $IMAGE_TAG
+      - name: Authorize Docker push
+        run: gcloud auth configure-docker
 
+      - name: Build and push Docker image
+        env:
+          IMAGE_TAG: "gcr.io/${{ env.CLOUDSDK_PROJECT }}/${{ env.CI_REPOSITORY_NAME_SLUG }}/${{ env.CI_ACTION_REF_NAME }}/${{ env.CI_ACTION_REF_NAME }}-dagster:latest"
+        run: |
+          docker build -t $IMAGE_TAG ./packages/dags -f ./packages/dags/Dockerfile --target dagster
+          docker push $IMAGE_TAG

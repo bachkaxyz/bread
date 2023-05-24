@@ -1,4 +1,4 @@
-FROM python:3.10 AS api-base
+FROM python:3.10 AS api
 
 RUN pip install poetry
 

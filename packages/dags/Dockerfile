@@ -1,4 +1,4 @@
-FROM python:3.10 AS dagster-base
+FROM python:3.10 AS dagster
 
 RUN pip install poetry==1.4.1
 
