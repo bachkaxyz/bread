@@ -5,7 +5,7 @@ from indexer.db import upsert_data, get_max_height
 from parse import Raw
 from indexer.process import process_block
 import logging
-from google.cloud.storage import Bucket
+from gcloud.aio.storage import Bucket
 
 # this is outside of live so that it can be accessed by the live function on every iteration
 current_height = 0
