@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS $schema.txs(
     gas_wanted BIGINT,
     codespace TEXT,
     timestamp TIMESTAMP,
+    tx JSONB,
     FOREIGN KEY (chain_id, height) REFERENCES $schema.raw(chain_id, height) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS $schema.logs (
@@ -52,4 +53,21 @@ CREATE TABLE IF NOT EXISTS $schema.log_columns (
     parse BOOLEAN NOT NULL DEFAULT FALSE,
 
     PRIMARY KEY (event, attribute)
+);
+
+CREATE TABLE IF NOT EXISTS $schema.messages (
+    txhash TEXT NOT NULL,
+    msg_index TEXT NOT NULL, 
+    type TEXT,
+    parsed JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (txhash, msg_index),
+    FOREIGN KEY (txhash) REFERENCES $schema.txs(txhash) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS $schema.msg_columns (
+    attribute TEXT NOT NULL PRIMARY KEY,
+    parse BOOLEAN NOT NULL DEFAULT FALSE
 );

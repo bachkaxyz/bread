@@ -16,7 +16,7 @@ class Log:
     txhash: str
     failed_msg: str | None = None
     failed: bool = False
-    msg_index: int = 0
+    msg_index: str = "0"
     event_attributes = defaultdict(list)
 
     def get_cols(self) -> Set[Tuple[str, str]]:
@@ -71,7 +71,7 @@ def parse_logs(raw_logs: str, txhash: str) -> List[Log]:
         return [Log(txhash, failed=True, failed_msg=raw_logs)]
 
     for msg_index, raw_log in enumerate(json_raw_logs):  # for each message
-        log = Log(txhash=txhash, msg_index=msg_index)
+        log = Log(txhash=txhash, msg_index=str(msg_index))
         log.event_attributes = defaultdict(list)
         # for each event in the message
         for i, event in enumerate(raw_log["events"]):
@@ -153,6 +153,7 @@ class Tx:
     gas_wanted: int
     codespace: str
     timestamp: datetime
+    tx: dict  # this contains the raw messages, fee, signatures, auth info, etc
 
     def get_db_params(self):
         """Helper function to get the parameters for the database"""
@@ -166,10 +167,30 @@ class Tx:
             json.dumps(self.logs),
             json.dumps(self.events),
             self.raw_log,
+            json.dumps(self.tx),
             self.gas_used,
             self.gas_wanted,
             self.codespace,
             self.timestamp,
+        )
+
+
+@dataclass
+class Message:
+    txhash: str
+    type: str
+    attributes: Dict[str, str]
+    msg_index: str = "0"
+
+    def get_cols(self) -> Set[str]:
+        return set(self.attributes.keys())
+
+    def get_message_db_params(self) -> Tuple[str, str, str, str]:
+        return (
+            self.txhash,
+            str(self.msg_index),
+            self.type,
+            json.dumps(self.attributes),
         )
 
 
@@ -188,8 +209,12 @@ class Raw:
 
     block: Block | None = None
     txs: List[Tx] = field(default_factory=list)
+
     logs: List[Log] = field(default_factory=list)
     log_columns: set = field(default_factory=set)
+
+    messages: List[Message] = field(default_factory=list)
+    message_columns: set = field(default_factory=set)
 
     def parse_block(self, raw_block: dict):
         """Parse a block from the raw block data
@@ -253,15 +278,25 @@ class Raw:
                         timestamp=datetime.strptime(
                             tx_response["timestamp"], "%Y-%m-%dT%H:%M:%SZ"
                         ),
+                        tx=tx_response["tx"],
                     )
                 )
                 logs = parse_logs(
                     tx_response["raw_log"],
                     tx_response["txhash"],
                 )
+
                 self.logs.extend(logs)
                 for log in logs:
                     self.log_columns = self.log_columns.union(log.get_cols())
+
+                messages = parse_messages(tx_response["tx"], tx_response["txhash"])
+                self.messages.extend(messages)
+                for message in messages:
+                    self.message_columns = self.message_columns.union(
+                        message.get_cols()
+                    )
+
         else:
             raise BlockPrimaryKeyNotDefinedError(
                 "A transactions needs a chain id and height in order to be inserted correctly since this is the primary key"
@@ -288,32 +323,26 @@ class Raw:
         """Helper function to get the parameters for the database"""
         return [log.get_log_db_params() for log in self.logs]
 
+    def get_msg_columns_db_params(self):
+        """Helper function to get the parameters for the database"""
+        return [[i] for i in self.message_columns]
 
-# def flatten_msg(msg: dict):
-#     updated_msg = {}
-#     for k, v in msg.items():
-#         if k == "commit":  # this is a reserved word in postgres
-#             k = "_commit"
-#         if isinstance(v, dict):
-#             updated_sub_msg = flatten_msg(v)
-#             for k1, v1 in updated_sub_msg.items():
-#                 updated_msg[f"{k}_{k1}"] = v1
-#         elif isinstance(v, list):
-#             updated_msg[k] = json.dumps(v)
-#         else:
-#             updated_msg[k] = str(v)
-#     return updated_msg
+    def get_messages_db_params(self):
+        """Helper function to get the parameters for the database"""
+        return [log.get_message_db_params() for log in self.messages]
 
 
-# def parse_messages(messages: dict, txhash: str):
-#     msgs = []
-#     msg_cols = set()
-#     for msg_index, msg in enumerate(messages):
-#         msg_dic = flatten_msg(msg)
-
-#         msg_dic = {fix_entry(k): fix_entry(v) for k, v in msg_dic.items()}
-#         msg_dic["txhash"] = txhash
-#         msg_dic["msg_index"] = msg_index
-#         msg_cols.update(msg_dic.keys())
-#         msgs.append(msg_dic)
-#     return msgs, msg_cols
+def parse_messages(tx: dict, txhash: str) -> List[Message]:
+    messages: List[Dict[str, str]] = tx["body"]["messages"]
+    parsed_messages: List[Message] = []
+    for i, msg in enumerate(messages):
+        attributes = {k: v for k, v in msg.items()}
+        attributes.pop("@type")
+        msg = Message(
+            msg_index=str(i),
+            txhash=txhash,
+            type=msg["@type"],
+            attributes=attributes,
+        )
+        parsed_messages.append(msg)
+    return parsed_messages

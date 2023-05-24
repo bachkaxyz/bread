@@ -13,6 +13,5 @@ services:
     volumes:
       - .:/indexer
       - $GOOGLE_APPLICATION_CREDENTIALS:/indexer/creds.json
-    container_name: ${COMPOSE_PREFIX}-indexer
     command: python indexer/main.py
     working_dir: /indexer
