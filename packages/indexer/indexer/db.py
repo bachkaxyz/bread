@@ -12,6 +12,7 @@ from indexer.exceptions import ChainDataIsNoneError
 from parse import Raw
 import logging
 from gcloud.aio.storage import Bucket, Storage, Blob
+from aiofiles import open as aio_open, os as aio_os
 
 # timing
 blob_upload_times = []
@@ -78,19 +79,22 @@ async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket, chain: CosmosChain):
     # loop = asyncio.get_event_loop()
     tasks: List[Coroutine[Any, Any, bool]] = [upsert_data_to_db(pool, raw)]
     if raw.height and raw.raw_block:
-        # tasks.append(
         blob_url = (
             f"{chain.chain_registry_name}/{raw.chain_id}/blocks/{raw.height}.json"
         )
 
-        await insert_json_into_gcs(bucket.new_blob(blob_url), raw.raw_block)
-        # )
+        tasks.append(insert_json_into_gcs(bucket.new_blob(blob_url), raw.raw_block))
+
     if raw.height and raw.raw_tx:
         blob_url = f"{chain.chain_registry_name}/{raw.chain_id}/txs/{raw.height}.json"
 
-        await insert_json_into_gcs(bucket.new_blob(blob_url), raw.raw_tx)
+        tasks.append(insert_json_into_gcs(bucket.new_blob(blob_url), raw.raw_tx))
     results = await asyncio.gather(*tasks)
+    logger = logging.getLogger("indexer")
+    logger.info(f"{raw.height} {results=}")
     return all(results)
+    logger.info("fake upsert completed")
+    return True
 
 
 async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
@@ -109,30 +113,17 @@ async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
     # we check if the data is valid before upserting it
     if raw.height is not None and raw.chain_id is not None:
         async with pool.acquire() as conn:
-            async with pool.acquire() as conn2:
-                async with pool.acquire() as conn3:
-                    async with pool.acquire() as conn4:
-                        conn: Connection
-                        conn2: Connection
-                        conn3: Connection
-                        conn4: Connection
-                        await insert_raw(conn, raw)
+            await insert_raw(conn, raw)
+            await insert_block(conn, raw)
 
-                        tasks = []
-                        # we are checking if the block is not None because we might only have the tx data and not the block data
-                        if raw.block is not None:
-                            tasks.append(insert_block(conn2, raw))
-                        if raw.txs:
-                            tasks.append(insert_many_txs(conn, raw))
-                        await asyncio.gather(*tasks)
+            tasks = []
+            # we are checking if the block is not None because we might only have the tx data and not the block data
+            await insert_many_txs(conn, raw)
 
-                        print(raw.message_columns)
-                        await asyncio.gather(
-                            insert_many_logs(conn, raw),
-                            insert_many_log_columns(conn2, raw),
-                            insert_many_messages(conn3, raw),
-                            insert_many_msg_columns(conn4, raw),
-                        )
+            await insert_many_logs(conn, raw)
+            await insert_many_log_columns(conn, raw)
+            await insert_many_messages(conn, raw)
+            await insert_many_msg_columns(conn, raw)
 
         logger.info(f"{raw.height=} inserted")
         upsert_end_time = time.time()
@@ -164,7 +155,10 @@ async def insert_json_into_gcs(
     retries = 0
     while retries < max_retries:
         try:
+            async with aio_open(blob.name, "w") as temp:
+                await temp.write(json.dumps(data))
             await blob.upload(json.dumps(data))
+            await aio_os.remove(blob.name)
             finish_time = time.time()
             blob_upload_times.append(finish_time - start_time)
             return True
