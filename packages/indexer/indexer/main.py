@@ -94,17 +94,21 @@ async def main():
             # start indexer
             chain = await get_chain_from_environment(session)
             BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
-            storage_client = Storage()
+            storage_client = Storage(session=session)
             bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
 
             # create temp file structure
-            os.makedirs(f"{chain.chain_registry_name}/{chain.chain_id}/blocks")
-            os.makedirs(f"{chain.chain_registry_name}/{chain.chain_id}/txs")
+            os.makedirs(
+                f"{chain.chain_registry_name}/{chain.chain_id}/blocks", exist_ok=True
+            )
+            os.makedirs(
+                f"{chain.chain_registry_name}/{chain.chain_id}/txs", exist_ok=True
+            )
 
             exceptions = await asyncio.gather(
-                run(pool, session, chain, bucket, live),
+                # run(pool, session, chain, bucket, live),
                 run(pool, session, chain, bucket, backfill_historical),
-                run(pool, session, chain, bucket, backfill_wrong_count),
+                # run(pool, session, chain, bucket, backfill_wrong_count),
             )
             for e in exceptions:
                 logging.error("Exception in main loop")
