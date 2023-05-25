@@ -93,8 +93,6 @@ async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket, chain: CosmosChain):
     logger = logging.getLogger("indexer")
     logger.info(f"{raw.height} {results=}")
     return all(results)
-    logger.info("fake upsert completed")
-    return True
 
 
 async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:

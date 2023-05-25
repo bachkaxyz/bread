@@ -106,9 +106,9 @@ async def main():
             )
 
             exceptions = await asyncio.gather(
-                # run(pool, session, chain, bucket, live),
+                run(pool, session, chain, bucket, live),
                 run(pool, session, chain, bucket, backfill_historical),
-                # run(pool, session, chain, bucket, backfill_wrong_count),
+                run(pool, session, chain, bucket, backfill_wrong_count),
             )
             for e in exceptions:
                 logging.error("Exception in main loop")
