@@ -12,6 +12,7 @@ from indexer.exceptions import ChainDataIsNoneError
 from parse import Raw
 import logging
 from gcloud.aio.storage import Bucket, Storage, Blob
+from aiofiles import open as aio_open, os as aio_os
 
 # timing
 blob_upload_times = []
@@ -164,7 +165,10 @@ async def insert_json_into_gcs(
     retries = 0
     while retries < max_retries:
         try:
+            async with aio_open(blob.name, "w") as temp:
+                await temp.write(json.dumps(data))
             await blob.upload(json.dumps(data))
+            await aio_os.remove(blob.name)
             finish_time = time.time()
             blob_upload_times.append(finish_time - start_time)
             return True
