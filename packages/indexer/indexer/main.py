@@ -30,23 +30,21 @@ def ignore_aiohttp_ssl_eror(loop: asyncio.AbstractEventLoop):
     orig_handler = loop.get_exception_handler()
 
     def ignore_ssl_error(loop: asyncio.AbstractEventLoop, context):
-        if context.get("message") in {
-            "SSL error in data received",
-            "Fatal error on transport",
-        }:
-            # validate we have the right exception, transport and protocol
-            exception = context.get("exception")
-            protocol = context.get("protocol")
-            if (
-                isinstance(exception, ssl.SSLError)
-                and exception.reason == "APPLICATION_DATA_AFTER_CLOSE_NOTIFY"
-                and isinstance(protocol, SSL_PROTOCOLS)
-            ):
-                if loop.get_debug():
-                    asyncio_logger.debug(
-                        "Ignoring asyncio SSL APPLICATION_DATA_AFTER_CLOSE_NOTIFY error"
-                    )
-                return
+        print(context)
+
+        # validate we have the right exception, transport and protocol
+        exception = context.get("exception")
+        protocol = context.get("protocol")
+        if (
+            isinstance(exception, ssl.SSLError)
+            and exception.reason == "APPLICATION_DATA_AFTER_CLOSE_NOTIFY"
+            and isinstance(protocol, SSL_PROTOCOLS)
+        ):
+            if loop.get_debug():
+                asyncio_logger.debug(
+                    "Ignoring asyncio SSL APPLICATION_DATA_AFTER_CLOSE_NOTIFY error"
+                )
+            return
         if orig_handler is not None:
             orig_handler(loop, context)
         else:
