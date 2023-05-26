@@ -3,7 +3,7 @@ import time
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, TypedDict
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientOSError, ClientResponse, ClientSession
 import logging
 from aiohttp.client_exceptions import ClientError
 from indexer.exceptions import APIResponseError
@@ -149,7 +149,7 @@ class CosmosChain(metaclass=Singleton):
                         return cur_api, json.loads(r)
                     else:
                         raise APIResponseError("API Response Not Valid")
-            except BaseException or Exception or ClientError as e:
+            except (BaseException, Exception, ClientError, ClientOSError) as e:
                 end_time = time.time()
                 logger = logging.getLogger("indexer")
                 logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
