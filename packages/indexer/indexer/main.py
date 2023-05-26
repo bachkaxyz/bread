@@ -85,7 +85,7 @@ async def main():
     """
 
     # this calls the function to ignore the aiohttp ssl error on the current event loop
-    ignore_aiohttp_ssl_eror(asyncio.get_running_loop())
+    # ignore_aiohttp_ssl_eror(asyncio.get_running_loop())
 
     schema_name = os.getenv("INDEXER_SCHEMA", "public")
     async with create_pool(
@@ -144,14 +144,18 @@ async def main():
             os.makedirs(
                 f"{chain.chain_registry_name}/{chain.chain_id}/txs", exist_ok=True
             )
-
-            exceptions = await asyncio.gather(
-                run(pool, session, chain, bucket, live),
-                run(pool, session, chain, bucket, backfill_historical),
-                run(pool, session, chain, bucket, backfill_wrong_count),
-            )
-            for e in exceptions:
-                logging.error("Exception in main loop")
+            try:
+                results = await asyncio.gather(
+                    run(pool, session, chain, bucket, live),
+                    run(pool, session, chain, bucket, backfill_historical),
+                    run(pool, session, chain, bucket, backfill_wrong_count),
+                )
+                for e in results:
+                    logging.error("Exception in main loop")
+                    logging.error(e)
+                    logging.error(traceback.format_exc())
+            except Exception as e:
+                logging.error("Exception in main loop (try)")
                 logging.error(e)
                 logging.error(traceback.format_exc())
 
