@@ -303,7 +303,10 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, str, Apis]:
         raise EnvironmentError(
             "No APIS. Either provide your own apis through APIS or turn LOAD_CHAIN_REGISTRY_APIS to True"
         )
-    formatted_apis = {api: Api({"hit": 0, "miss": 0, "times": []}) for api in apis}
+
+    # replace https with http to try and fix SSL errors
+    http_apis = [api.replace("https://", "http://") for api in apis]
+    formatted_apis = {api: Api({"hit": 0, "miss": 0, "times": []}) for api in http_apis}
     return chain_id, chain_registry_name, formatted_apis
 
 
