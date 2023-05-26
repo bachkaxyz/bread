@@ -1,4 +1,5 @@
 import json, traceback
+from ssl import SSLError
 import time
 import os
 from dataclasses import dataclass
@@ -149,7 +150,13 @@ class CosmosChain(metaclass=Singleton):
                         return cur_api, json.loads(r)
                     else:
                         raise APIResponseError("API Response Not Valid")
-            except (BaseException, Exception, ClientError, ClientOSError) as e:
+            except (
+                BaseException,
+                Exception,
+                ClientError,
+                ClientOSError,
+                SSLError,
+            ) as e:
                 end_time = time.time()
                 logger = logging.getLogger("indexer")
                 logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
