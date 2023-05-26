@@ -15,6 +15,44 @@ from indexer.db import create_tables, drop_tables
 from indexer.live import live
 from gcloud.aio.storage import Bucket, Storage
 from logging import Logger
+import asyncio
+import ssl
+import sys
+from asyncio.sslproto import SSLProtocol
+from asyncio.log import logger as asyncio_logger
+
+SSL_PROTOCOLS = (SSLProtocol,)
+
+
+def ignore_aiohttp_ssl_eror(loop: asyncio.AbstractEventLoop):
+    """Ignore aiohttp #3535 / cpython #13548 issue with SSL data after close"""
+
+    orig_handler = loop.get_exception_handler()
+
+    def ignore_ssl_error(loop: asyncio.AbstractEventLoop, context):
+        if context.get("message") in {
+            "SSL error in data received",
+            "Fatal error on transport",
+        }:
+            # validate we have the right exception, transport and protocol
+            exception = context.get("exception")
+            protocol = context.get("protocol")
+            if (
+                isinstance(exception, ssl.SSLError)
+                and exception.reason == "APPLICATION_DATA_AFTER_CLOSE_NOTIFY"
+                and isinstance(protocol, SSL_PROTOCOLS)
+            ):
+                if loop.get_debug():
+                    asyncio_logger.debug(
+                        "Ignoring asyncio SSL APPLICATION_DATA_AFTER_CLOSE_NOTIFY error"
+                    )
+                return
+        if orig_handler is not None:
+            orig_handler(loop, context)
+        else:
+            loop.default_exception_handler(context)
+
+    loop.set_exception_handler(ignore_ssl_error)
 
 
 async def run(
@@ -47,6 +85,10 @@ async def main():
     """
     This function is the entry point for the indexer. It creates the database connection pool and runs both the live and backfill tasks.
     """
+
+    # this calls the function to ignore the aiohttp ssl error on the current event loop
+    ignore_aiohttp_ssl_eror(asyncio.get_running_loop())
+
     schema_name = os.getenv("INDEXER_SCHEMA", "public")
     async with create_pool(
         host=os.getenv("POSTGRES_HOST"),
