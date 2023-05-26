@@ -1,9 +1,10 @@
 import json, traceback
+from ssl import SSLError
 import time
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Tuple, TypedDict
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientOSError, ClientResponse, ClientSession
 import logging
 from aiohttp.client_exceptions import ClientError
 from indexer.exceptions import APIResponseError
@@ -149,7 +150,13 @@ class CosmosChain(metaclass=Singleton):
                         return cur_api, json.loads(r)
                     else:
                         raise APIResponseError("API Response Not Valid")
-            except BaseException or Exception or ClientError as e:
+            except (
+                BaseException,
+                Exception,
+                ClientError,
+                ClientOSError,
+                SSLError,
+            ) as e:
                 end_time = time.time()
                 logger = logging.getLogger("indexer")
                 logger.error(f"error {cur_api}{endpoint}\n{traceback.format_exc()}")
@@ -296,7 +303,10 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, str, Apis]:
         raise EnvironmentError(
             "No APIS. Either provide your own apis through APIS or turn LOAD_CHAIN_REGISTRY_APIS to True"
         )
-    formatted_apis = {api: Api({"hit": 0, "miss": 0, "times": []}) for api in apis}
+
+    # replace https with http to try and fix SSL errors
+    http_apis = [api.replace("https://", "http://") for api in apis]
+    formatted_apis = {api: Api({"hit": 0, "miss": 0, "times": []}) for api in http_apis}
     return chain_id, chain_registry_name, formatted_apis
 
 

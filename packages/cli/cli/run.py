@@ -38,7 +38,7 @@ def indexer(
 
     if redeploy:
         docker.compose.down(remove_orphans=True)
-    if build_packages or redeploy:
+    if build_packages:
         remove_all_package_builds()
         build_all_packages()
 

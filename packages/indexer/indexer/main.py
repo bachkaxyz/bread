@@ -97,6 +97,14 @@ async def main():
             storage_client = Storage()
             bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
 
+            # create temp file structure
+            os.makedirs(
+                f"{chain.chain_registry_name}/{chain.chain_id}/blocks", exist_ok=True
+            )
+            os.makedirs(
+                f"{chain.chain_registry_name}/{chain.chain_id}/txs", exist_ok=True
+            )
+
             exceptions = await asyncio.gather(
                 run(pool, session, chain, bucket, live),
                 run(pool, session, chain, bucket, backfill_historical),
