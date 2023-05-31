@@ -133,7 +133,7 @@ async def main():
 
             # start indexer
             chain = await get_chain_from_environment(session)
-            BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer")
+            BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer-dev")
             storage_client = Storage()
             bucket = storage_client.get_bucket(BUCKET_NAME)  # your bucket name
 
