@@ -1,46 +1,41 @@
 import asyncio
 import re
 from typing import List, Tuple
+
+from aiohttp import ClientSession
+from aioresponses import aioresponses
+from asyncpg import Connection, Pool
+from deepdiff import DeepDiff
+from gcloud.aio.storage import Bucket, Storage
+from indexer.backfill import (
+    backfill_historical,
+    backfill_wrong_count,
+    get_data_historical,
+    run_and_upsert_tasks,
+)
 from indexer.chain import CosmosChain
-from pytest_mock import MockerFixture, mocker
-from parse import Raw
-from indexer.process import process_tx, process_block
-from indexer.live import live, get_data_live
 from indexer.db import (
     create_tables,
     drop_tables,
+    missing_blocks_cursor,
     upsert_data,
     wrong_tx_count_cursor,
-    missing_blocks_cursor,
 )
-from indexer.backfill import (
-    get_data_historical,
-    run_and_upsert_tasks,
-    backfill_historical,
-    backfill_wrong_count,
-)
-from tests.db_test import (
-    mock_schema,
-    mock_pool,
-    storage_config,
-)
-from tests.chain_test import mock_chain, emptyApi, session
+from indexer.live import get_data_live, live
+from indexer.manager import Manager
+from indexer.process import process_block, process_tx
+from parse import Raw
 from parse.fixtures import *
-from asyncpg import Connection, Pool
-from aiohttp import ClientSession
-from gcloud.aio.storage import Bucket, Storage
-from deepdiff import DeepDiff
-from aioresponses import aioresponses
+from pytest_mock import MockerFixture, mocker
 
 
 async def test_live(
     raws: List[Raw],
     mock_schema: str,
     mock_chain: CosmosChain,
-    mock_pool: Pool,
     storage_config: Tuple[ClientSession, Storage, Bucket],
     mocker: MockerFixture,
-    session: ClientSession,
+    manager: Manager,
 ):
     storage_session, storage, bucket = storage_config
     raw = raws[0]
@@ -63,8 +58,7 @@ async def test_get_data_live_correct(
     unparsed_raw_data,
     mocker: MockerFixture,
     mock_chain: CosmosChain,
-    mock_pool: Pool,
-    session: ClientSession,
+    manager: Manager,
 ):
     mock_chain.chain_id = "jackal-1"
     current_height = 0
@@ -110,7 +104,7 @@ async def test_tx_parsing_errors(
     raws: List[Raw],
     unparsed_raw_data: List[dict],
     mock_chain: CosmosChain,
-    session: ClientSession,
+    manager: Manager,
 ):
     mock_chain.chain_id = "jackal-1"
     raw = raws[0]
@@ -206,12 +200,11 @@ async def test_tx_parsing_errors(
 
 async def test_backfill(
     raws: List[Raw],
-    mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
     storage_config: Tuple[ClientSession, Storage, Bucket],
     mocker: MockerFixture,
-    session: ClientSession,
+    manager: Manager,
 ):
     storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
@@ -237,14 +230,13 @@ async def test_backfill(
 
 
 async def test_backfill_run_and_upsert_batch(
-    mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
     mocker,
     raws: List[Raw],
     unparsed_raw_data: List[dict],
     storage_config: Tuple[ClientSession, Storage, Bucket],
-    session: ClientSession,
+    manager: Manager,
 ):
     storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
@@ -292,14 +284,13 @@ async def test_backfill_run_and_upsert_batch(
 
 
 async def test_wrong_tx_count_cursor_under_than_20(
-    mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
     mocker,
     raws: List[Raw],
     unparsed_raw_data: List[dict],
     storage_config: Tuple[ClientSession, Storage, Bucket],
-    session: ClientSession,
+    manager: Manager,
 ):
     storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
@@ -368,14 +359,13 @@ async def test_wrong_tx_count_cursor_under_than_20(
 
 
 async def test_wrong_tx_count_cursor_more_than_step_size(
-    mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
     mocker,
     raws: List[Raw],
     unparsed_raw_data: List[dict],
     storage_config: Tuple[ClientSession, Storage, Bucket],
-    session: ClientSession,
+    manager: Manager,
 ):
     storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
@@ -419,8 +409,7 @@ async def test_wrong_tx_count_cursor_more_than_step_size(
 async def test_get_data_historical_block_is_none(
     mocker,
     mock_chain: CosmosChain,
-    mock_pool: Pool,
-    session: ClientSession,
+    manager: Manager,
 ):
     mocker.patch("indexer.chain.CosmosChain.get_block", return_value=None)
 
@@ -428,14 +417,13 @@ async def test_get_data_historical_block_is_none(
 
 
 async def test_missing_blocks_cursor_more_than_20(
-    mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
     mocker,
     raws: List[Raw],
     unparsed_raw_data: List[dict],
     storage_config: Tuple[ClientSession, Storage, Bucket],
-    session: ClientSession,
+    manager: Manager,
 ):
     storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
@@ -487,14 +475,13 @@ async def test_missing_blocks_cursor_more_than_20(
 
 
 async def test_missing_blocks_cursor_less_than_20(
-    mock_pool: Pool,
     mock_chain: CosmosChain,
     mock_schema: str,
     mocker,
     raws: List[Raw],
     unparsed_raw_data: List[dict],
     storage_config: Tuple[ClientSession, Storage, Bucket],
-    session: ClientSession,
+    manager: Manager,
 ):
     storage_session, storage, bucket = storage_config
     async with mock_pool.acquire() as conn:
@@ -546,14 +533,14 @@ async def test_missing_blocks_cursor_less_than_20(
 
 
 async def test_process_tx_incorrect_wrong_input(
-    mock_chain: CosmosChain, session: ClientSession
+    mock_chain: CosmosChain, manager: Manager
 ):
     raw = Raw()
     assert await process_tx(raw, session, mock_chain) == None
 
 
 async def test_parse_block_unsuccessfully_parse(
-    mock_chain: CosmosChain, mocker: MockerFixture, session: ClientSession
+    mock_chain: CosmosChain, mocker: MockerFixture, manager: Manager
 ):
     mocker.patch("parse.Raw.parse_block", return_value=None)
 

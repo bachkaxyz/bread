@@ -5,6 +5,7 @@ from typing import List, Set, Tuple
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
 from indexer.db import create_tables, drop_tables, upsert_data, get_max_height
+from indexer.manager import Manager
 from pytest_mock import MockerFixture
 from parse import Block, Raw, Tx, Log
 from deepdiff import DeepDiff
@@ -17,37 +18,7 @@ from indexer.db import missing_blocks_cursor, insert_block, insert_json_into_gcs
 from indexer.exceptions import ChainDataIsNoneError
 
 # fixtures
-from tests.chain_test import mock_chain, emptyApi
 from parse.fixtures import *
-
-
-@pytest.fixture
-def mock_schema():
-    return "public"
-
-
-@pytest.fixture
-async def mock_pool(mock_schema):
-    pool = await create_pool(
-        host=os.getenv("POSTGRES_HOST"),
-        port=os.getenv("POSTGRES_PORT"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        database=os.getenv("POSTGRES_DB"),
-        server_settings={"search_path": mock_schema},
-    )
-    return pool
-
-
-@pytest.fixture
-async def storage_config():
-    session = ClientSession()
-    storage = Storage(session=session)
-    BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer-test")
-    bucket = storage.get_bucket(BUCKET_NAME)  # your bucket name
-    yield session, storage, bucket
-
-    await session.close()
 
 
 async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
@@ -84,7 +55,7 @@ async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
 
 
 async def test_upsert_data(
-    mock_pool: Pool,
+    manager: Manager,
     mock_schema: str,
     mock_chain: CosmosChain,
     storage_config: Tuple[ClientSession, Storage, Bucket],
@@ -202,7 +173,7 @@ async def test_upsert_data(
 
 async def test_get_missing_blocks(
     raws: List[Raw],
-    mock_pool: Pool,
+    manager: Manager,
     mock_schema: str,
     mock_chain: CosmosChain,
     storage_config: Tuple[ClientSession, Storage, Bucket],
@@ -231,7 +202,7 @@ async def test_get_missing_blocks(
 
 
 async def test_invalid_upsert_data(
-    mock_pool: Pool,
+    manager: Manager,
     mock_schema: str,
     storage_config: Tuple[ClientSession, Storage, Bucket],
     mock_chain: CosmosChain,
@@ -251,7 +222,7 @@ async def test_db_max_height(
     raws: List[Raw],
     mock_schema: str,
     mock_chain: CosmosChain,
-    mock_pool: Pool,
+    manager: Manager,
     storage_config: Tuple[ClientSession, Storage, Bucket],
 ):
     mock_bucket = storage_config[2]
@@ -269,7 +240,7 @@ async def test_db_max_height(
 
 
 async def test_no_db_max_height(
-    mock_pool: Pool, mock_schema: str, mock_chain: CosmosChain
+    manager: Manager, mock_schema: str, mock_chain: CosmosChain
 ):
     async with mock_pool.acquire() as conn:
         await drop_tables(conn, mock_schema)
