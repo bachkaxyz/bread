@@ -5,7 +5,7 @@ import time
 from typing import Any, Coroutine, List, Generator, Awaitable
 from aiohttp import ClientSession
 from asyncpg import Pool, Connection
-from indexer.chain import CosmosChain
+from indexer.chain import CosmosChain, Manager
 from indexer.db import (
     missing_blocks_cursor,
     wrong_tx_count_cursor,
@@ -22,7 +22,10 @@ min_block_height = 116001
 
 
 async def run_and_upsert_tasks(
-    raw_tasks: List[Task[Raw | None]], pool: Pool, bucket: Bucket, chain: CosmosChain
+    raw_tasks: List[Task[Raw | None]],
+    manager: Manager,
+    bucket: Bucket,
+    chain: CosmosChain,
 ):
     """Processing a list of coroutines and upserting the results  into the database.
 
@@ -35,7 +38,7 @@ async def run_and_upsert_tasks(
         raw = await task
         if raw:
             upsert_tasks.append(
-                asyncio.create_task(upsert_data(pool, raw, bucket, chain))
+                asyncio.create_task(upsert_data(manager, raw, bucket, chain))
             )
 
     await asyncio.gather(*upsert_tasks)
@@ -45,12 +48,10 @@ while_times = []
 hun_times = []
 
 
-async def backfill_wrong_count(
-    session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket
-):
+async def backfill_wrong_count(manager: Manager, chain: CosmosChain, bucket: Bucket):
     logger = logging.getLogger("indexer")
     logger.info("backfill - starting backfill")
-    async with pool.acquire() as cursor_conn:
+    async with (await manager.getPool()).acquire() as cursor_conn:
         cursor_conn: Connection
 
         # we are using transactions here since a cursor is used
@@ -70,23 +71,21 @@ async def backfill_wrong_count(
                 )
                 # since the block has already been processed, we can just process the txs
 
-                raw_tasks.append(asyncio.create_task(process_tx(raw, session, chain)))
+                raw_tasks.append(asyncio.create_task(process_tx(raw, manager, chain)))
 
                 if len(raw_tasks) > chain.step_size:
                     logger.info(
                         f"backfill wrong count - upserting {len(raw_tasks)} tasks"
                     )
-                    await run_and_upsert_tasks(raw_tasks, pool, bucket, chain)
+                    await run_and_upsert_tasks(raw_tasks, manager, bucket, chain)
                     raw_tasks = []
 
             logger.info(f"backfill wrong count - upserting {len(raw_tasks)} tasks")
-            await run_and_upsert_tasks(raw_tasks, pool, bucket, chain)
+            await run_and_upsert_tasks(raw_tasks, manager, bucket, chain)
     logger.info("backfill wrong count - done")
 
 
-async def backfill_historical(
-    session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket
-):
+async def backfill_historical(manager: Manager, chain: CosmosChain, bucket: Bucket):
     global while_times, hun_times
     """Backfilling the database with historical data.
 
@@ -97,7 +96,7 @@ async def backfill_historical(
     """
     logger = logging.getLogger("indexer")
     logger.info("backfill - starting backfill")
-    async with pool.acquire() as cursor_conn:
+    async with (await manager.getPool()).acquire() as cursor_conn:
         cursor_conn: Connection
 
         # we are using transactions here since a cursor is used
@@ -111,7 +110,7 @@ async def backfill_historical(
                     logger.info("backfill historical - min block in db reached")
 
                     # if the lowest block in the database is the min block height, then we are done
-                    lowest_height = await chain.get_lowest_height(session)
+                    lowest_height = await chain.get_lowest_height(manager)
                     logger.info(f"lowest height {lowest_height=}")
 
                     # if the lowest block in the database is not the min block height, then we need to backfill the missing blocks
@@ -143,15 +142,13 @@ async def backfill_historical(
                         f"backfill historical - querying range {current_height} - {query_lower_bound}"
                     )
 
-                    # query and process the blocks in the range
+                    # # query and process the blocks in the range
                     tasks: List[Task[Raw | None]] = [
-                        asyncio.create_task(
-                            get_data_historical(session, chain, h, pool)
-                        )
+                        asyncio.create_task(get_data_historical(manager, chain, h))
                         for h in range(current_height, query_lower_bound, -1)
                     ]
 
-                    await run_and_upsert_tasks(tasks, pool, bucket, chain)
+                    await run_and_upsert_tasks(tasks, manager, bucket, chain)
 
                     logger.info("backfill historical - data upserted")
                     while_end_time = time.time()
@@ -233,7 +230,9 @@ def save_analytics(
 
 
 async def get_data_historical(
-    session: ClientSession, chain: CosmosChain, height: int, pool: Pool
+    manager: Manager,
+    chain: CosmosChain,
+    height: int,
 ) -> Raw | None:
     """Historical data processing for a single block.
 
@@ -245,11 +244,11 @@ async def get_data_historical(
     Returns:
         Raw | None: Raw data object or None if the block data is None.
     """
-    block_res_json = await chain.get_block(session, height=height)
+    block_res_json = await chain.get_block(manager, height=height)
     logger = logging.getLogger("indexer")
     logger.info(f"block returned {height=}")
     if block_res_json is not None:
-        return await process_block(block_res_json, session, chain)
+        return await process_block(block_res_json, manager, chain)
     else:
         logger.info("block data is None")
         return None
