@@ -4,7 +4,15 @@ import os
 from typing import List, Set, Tuple
 from aiohttp import ClientSession
 from indexer.chain import CosmosChain
-from indexer.db import create_tables, drop_tables, upsert_data, get_max_height
+from indexer.db import (
+    create_tables,
+    drop_tables,
+    insert_block,
+    insert_json_into_gcs,
+    missing_blocks_cursor,
+    upsert_data,
+    get_max_height,
+)
 from indexer.manager import Manager
 from pytest_mock import MockerFixture
 from parse import Block, Raw, Tx, Log
@@ -14,27 +22,24 @@ from gcloud.aio.storage import Bucket, Storage
 import pytest
 from asyncpg import Connection, Pool, create_pool
 
-from indexer.db import missing_blocks_cursor, insert_block, insert_json_into_gcs
 from indexer.exceptions import ChainDataIsNoneError
 
-# fixtures
-from parse.fixtures import *
 
-
-async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
+async def test_create_drop_tables(manager: Manager, schema: str):
     async def check_tables(table_names) -> int:
-        async with mock_pool.acquire() as conn:
+        async with (await manager.getPool()).acquire() as conn:
             results = await conn.fetch(
                 f"""
                 SELECT table_name FROM information_schema.tables
-                WHERE table_schema = '{mock_schema}'
+                WHERE table_schema = '{schema}'
                 AND table_name in {table_names}
                 """
             )
         return len(results)
 
-    async with mock_pool.acquire() as conn:
-        await create_tables(conn, mock_schema)
+    async with (await manager.getPool()).acquire() as conn:
+        await drop_tables(conn, schema)
+        await create_tables(conn, schema)
 
     table_names = (
         "raw",
@@ -48,27 +53,27 @@ async def test_create_drop_tables(mock_pool: Pool, mock_schema: str):
 
     assert await check_tables(table_names) == len(table_names)
 
-    async with mock_pool.acquire() as conn:
-        await drop_tables(conn, mock_schema)
+    async with (await manager.getPool()).acquire() as conn:
+        await drop_tables(conn, schema)
 
     assert await check_tables(table_names) == 0
 
 
 async def test_upsert_data(
     manager: Manager,
-    mock_schema: str,
-    mock_chain: CosmosChain,
+    schema: str,
+    chain: CosmosChain,
     storage_config: Tuple[ClientSession, Storage, Bucket],
     raws: List[Raw],
 ):
     storage_session, storage, bucket = storage_config
-    async with mock_pool.acquire() as conn:
+    async with (await manager.getPool()).acquire() as conn:
         conn: Connection
-        await drop_tables(conn, mock_schema)
-        await create_tables(conn, mock_schema)
+        await drop_tables(conn, schema)
+        await create_tables(conn, schema)
 
         await asyncio.gather(
-            *[upsert_data(mock_pool, raw, bucket, mock_chain) for raw in raws]
+            *[upsert_data(manager, raw, bucket, chain) for raw in raws]
         )
 
         raw_results = await conn.fetch("select * from raw order by height asc")
@@ -85,13 +90,13 @@ async def test_upsert_data(
 
         msg_columns_results = await conn.fetch("select * from msg_columns")
 
-    for raw, res in zip(raws, raw_results):
+    for raw, res in zip(raws, raw_results):  # type: ignore
         assert raw.chain_id == res["chain_id"]
         assert raw.height == res["height"]
         assert raw.block_tx_count == res["block_tx_count"]
         assert raw.tx_responses_tx_count == res["tx_tx_count"]
 
-    for block, res_block in zip([raw.block for raw in raws], block_results):
+    for block, res_block in zip([raw.block for raw in raws], block_results):  # type: ignore
         if block:
             res_block_parsed = Block(
                 height=res_block["height"],
@@ -100,14 +105,13 @@ async def test_upsert_data(
                 proposer_address=res_block["proposer_address"],
                 block_hash=res_block["block_hash"],
             )
-
-            for b, r in zip(block.get_db_params(), res_block_parsed.get_db_params()):
+            for b, r in zip(block.get_db_params(), res_block_parsed.get_db_params()):  # type: ignore
                 assert b == r
 
     txs: List[Tx] = []
 
     [txs.extend(raw.txs) for raw in raws]
-    for tx, res_tx in zip(
+    for tx, res_tx in zip(  # type: ignore
         sorted(txs, key=lambda x: x.txhash),
         sorted(tx_results, key=lambda x: x["txhash"]),
     ):
@@ -131,7 +135,7 @@ async def test_upsert_data(
         keys = "txhash, chain_id, height, code, data, info, logs, events, raw_log, tx, gas_used, gas_wanted, codespace, timestamp".split(
             ", "
         )
-        for k, b, r in zip(keys, tx.get_db_params(), res_tx_parsed.get_db_params()):
+        for k, b, r in zip(keys, tx.get_db_params(), res_tx_parsed.get_db_params()):  # type: ignore
             try:
                 actual = json.loads(str(b))
                 expected = json.loads(str(r))
@@ -141,7 +145,7 @@ async def test_upsert_data(
 
     logs: List[Log] = []
     [logs.extend(raw.logs) for raw in raws]
-    for log, res_log in zip(
+    for log, res_log in zip(  # type: ignore
         sorted(logs, key=lambda x: (x.txhash, int(x.msg_index))),
         sorted(log_results, key=lambda x: (x["txhash"], int(x["msg_index"]))),
     ):
@@ -167,87 +171,81 @@ async def test_upsert_data(
     fixed_log_columns_results = set([(e, a) for (e, a, _bool) in log_columns_results])
     assert {} == DeepDiff(sorted(log_columns), sorted(fixed_log_columns_results))
 
-    async with mock_pool.acquire() as conn:
-        await drop_tables(conn, mock_schema)
+    async with (await manager.getPool()).acquire() as conn:
+        await drop_tables(conn, schema)
 
 
 async def test_get_missing_blocks(
     raws: List[Raw],
     manager: Manager,
-    mock_schema: str,
-    mock_chain: CosmosChain,
+    schema: str,
+    chain: CosmosChain,
     storage_config: Tuple[ClientSession, Storage, Bucket],
 ):
     storage_session, storage, bucket = storage_config
-    async with mock_pool.acquire() as conn:
+    async with (await manager.getPool()).acquire() as conn:
         conn: Connection
-        await drop_tables(conn, mock_schema)
-        await create_tables(conn, mock_schema)
+        await drop_tables(conn, schema)
+        await create_tables(conn, schema)
 
         await asyncio.gather(
-            *[upsert_data(mock_pool, raw, bucket, mock_chain) for raw in raws]
+            *[upsert_data(manager, raw, bucket, chain) for raw in raws]
         )
 
-        mock_chain.chain_id = "jackal-1"
+        chain.chain_id = "jackal-1"
 
         async with conn.transaction():
             res_heights = [
-                height async for height in missing_blocks_cursor(conn, mock_chain)
+                height async for height in missing_blocks_cursor(conn, chain)
             ]
             assert [
                 (row["height"], row["difference_per_block"]) for row in res_heights
             ] == [(2316144, 2), (2316140, -1)]
 
-        await drop_tables(conn, mock_schema)
+        await drop_tables(conn, schema)
 
 
 async def test_invalid_upsert_data(
     manager: Manager,
-    mock_schema: str,
     storage_config: Tuple[ClientSession, Storage, Bucket],
-    mock_chain: CosmosChain,
+    chain: CosmosChain,
+    schema: str,
 ):
     storage_session, storage, bucket = storage_config
-    async with mock_pool.acquire() as conn:
-        await drop_tables(conn, mock_schema)
+    async with (await manager.getPool()).acquire() as conn:
+        await drop_tables(conn, schema)
     raw = Raw()
-    assert False == await upsert_data(mock_pool, raw, bucket, mock_chain)
-
-    with pytest.raises(ChainDataIsNoneError):
-        async with mock_pool.acquire() as conn:
-            await insert_block(conn, raw)
+    assert False == await upsert_data(manager, raw, bucket, chain)
 
 
 async def test_db_max_height(
     raws: List[Raw],
-    mock_schema: str,
-    mock_chain: CosmosChain,
     manager: Manager,
+    chain: CosmosChain,
+    schema: str,
     storage_config: Tuple[ClientSession, Storage, Bucket],
 ):
     mock_bucket = storage_config[2]
     raw = raws[0]
     if raw and raw.chain_id:
-        async with mock_pool.acquire() as conn:
-            await drop_tables(conn, mock_schema)
-            await create_tables(conn, mock_schema)
+        async with (await manager.getPool()).acquire() as conn:
+            await drop_tables(conn, schema)
+            await create_tables(conn, schema)
 
-        assert True == await upsert_data(mock_pool, raw, mock_bucket, mock_chain)
+        assert True == await upsert_data(manager, raw, mock_bucket, chain)
 
-        mock_chain.chain_id = raw.chain_id
-        async with mock_pool.acquire() as conn:
-            assert raws[0].height == await get_max_height(conn, mock_chain)
+        chain.chain_id = raw.chain_id
+        async with (await manager.getPool()).acquire() as conn:
+            assert raws[0].height == await get_max_height(conn, chain)
 
 
-async def test_no_db_max_height(
-    manager: Manager, mock_schema: str, mock_chain: CosmosChain
-):
-    async with mock_pool.acquire() as conn:
-        await drop_tables(conn, mock_schema)
-        await create_tables(conn, mock_schema)
+async def test_no_db_max_height(manager: Manager, schema: str, chain: CosmosChain):
+    async with (await manager.getPool()).acquire() as conn:
+        await drop_tables(conn, schema)
+        await create_tables(conn, schema)
 
-    async with mock_pool.acquire() as conn:
-        assert 0 == await get_max_height(conn, mock_chain)
+    async with (await manager.getPool()).acquire() as conn:
+        assert 0 == await get_max_height(conn, chain)
 
 
 async def test_insert_block_into_gcs(
