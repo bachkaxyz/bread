@@ -5,53 +5,16 @@ import logging
 import os
 import traceback
 from typing import Any, Callable, Coroutine, Dict
-from aiohttp import ClientSession, ClientTimeout
 import aiohttp
 
-from asyncpg import Connection, Pool, create_pool, connect
+from asyncpg import Connection, connect
 from indexer.backfill import backfill_historical, backfill_wrong_count
 
 from indexer.chain import Manager, get_chain_from_environment, CosmosChain
 from indexer.db import create_tables, drop_tables
 from indexer.live import live
 from gcloud.aio.storage import Bucket, Storage
-from logging import Logger
 import asyncio
-import ssl
-import sys
-from asyncio.sslproto import SSLProtocol
-from asyncio.log import logger as asyncio_logger
-
-SSL_PROTOCOLS = (SSLProtocol,)
-
-
-def ignore_aiohttp_ssl_eror(loop: asyncio.AbstractEventLoop):
-    """Ignore aiohttp #3535 / cpython #13548 issue with SSL data after close"""
-
-    orig_handler = loop.get_exception_handler()
-
-    def ignore_ssl_error(loop: asyncio.AbstractEventLoop, context):
-        print(context)
-
-        # validate we have the right exception, transport and protocol
-        exception = context.get("exception")
-        protocol = context.get("protocol")
-        if (
-            isinstance(exception, ssl.SSLError)
-            and exception.reason == "APPLICATION_DATA_AFTER_CLOSE_NOTIFY"
-            and isinstance(protocol, SSL_PROTOCOLS)
-        ):
-            if loop.get_debug():
-                asyncio_logger.debug(
-                    "Ignoring asyncio SSL APPLICATION_DATA_AFTER_CLOSE_NOTIFY error"
-                )
-            return
-        if orig_handler is not None:
-            orig_handler(loop, context)
-        else:
-            loop.default_exception_handler(context)
-
-    loop.set_exception_handler(ignore_ssl_error)
 
 
 async def run(

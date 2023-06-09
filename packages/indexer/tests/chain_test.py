@@ -301,13 +301,17 @@ async def test_remove_bad_api_exception(emptyApi: Api, session: ClientSession):
             )
 
 
-async def is_error_response():
-    await is_valid_response(
+async def test_is_error_response():
+    assert False == await is_valid_response(
         r={"code": "test", "message": "test", "details": "test"}, resp=Mock(status=200)
     )
+    assert False == await is_valid_response({}, Mock(status=200))
 
 
-def get_next_api_only_one(chain: CosmosChain):
+def test_get_next_api_only_one(chain: CosmosChain):
     api = "https://api.jackalprotocol.com"
     chain.apis = {api: Api(hit=0, miss=0, times=[])}
+    chain.current_api_index = 0
+    assert len(chain.apis) == 1
+    assert len(chain.apis.values()) == 1
     assert chain.get_next_api() == api

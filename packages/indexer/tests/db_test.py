@@ -275,3 +275,4 @@ async def test_insert_into_gcs_error(
     )
 
     assert False == await insert_json_into_gcs(blob, {"test": "test"})
+    os.remove("test")
