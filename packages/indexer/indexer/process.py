@@ -1,13 +1,11 @@
 import logging
 from aiohttp import ClientSession
-from indexer.chain import CosmosChain
+from indexer.chain import CosmosChain, Manager
 
 from parse import Raw
 
 
-async def process_tx(
-    raw: Raw, session: ClientSession, chain: CosmosChain
-) -> Raw | None:
+async def process_tx(raw: Raw, session: Manager, chain: CosmosChain) -> Raw | None:
     """Query and process transactions from raw block
 
     Args:
@@ -68,13 +66,13 @@ async def process_tx(
 
 
 async def process_block(
-    block_raw_data: dict, session: ClientSession, chain: CosmosChain
+    block_raw_data: dict, manager: Manager, chain: CosmosChain
 ) -> Raw | None:
     """Processes the raw block data and returns a Raw object
 
     Args:
         block_raw_data (dict): Block data to process from the chain
-        session (ClientSession): Client session to use for requests
+        manager (Manager): Manger manages Client session to use for requests
         chain (CosmosChain): CosmosChain object to use for requests
 
     Returns:
@@ -92,7 +90,7 @@ async def process_block(
     # block and transactions successfully parsed with transactions
     if raw.height and raw.block_tx_count and raw.block_tx_count > 0:
         logger.info("raw block tx count > 0")
-        return await process_tx(raw, session, chain)
+        return await process_tx(raw, manager, chain)
 
     # block successfully parsed but no transactions
     if raw.height and raw.block_tx_count == 0:
