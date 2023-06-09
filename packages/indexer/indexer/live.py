@@ -1,6 +1,6 @@
 from aiohttp import ClientSession
 from asyncpg import Pool
-from indexer.chain import LATEST, CosmosChain
+from indexer.chain import LATEST, CosmosChain, Manager
 from indexer.db import upsert_data, get_max_height
 from parse import Raw
 from indexer.process import process_block
@@ -11,7 +11,7 @@ from gcloud.aio.storage import Bucket
 current_height = 0
 
 
-async def live(session: ClientSession, chain: CosmosChain, pool: Pool, bucket: Bucket):
+async def live(manager: Manager, chain: CosmosChain, bucket: Bucket):
     """Pull live data from the chain and upsert it into the database.
 
     Args:
@@ -25,23 +25,23 @@ async def live(session: ClientSession, chain: CosmosChain, pool: Pool, bucket: B
 
     # since we are using a global variable, we need to check if it is 0 and if so, get the max height from the database
     if current_height == 0:
-        async with pool.acquire() as conn:
+        async with (await manager.getPool()).acquire() as conn:
             current_height = await get_max_height(conn, chain)
             logger.info(f"live - max height from db is {current_height=}")
 
     # get the latest block from the chain
-    raw = await get_data_live(session, chain, current_height)
+    raw = await get_data_live(manager, chain, current_height)
 
     # if the latest block is defined and it is new, upsert it into the database
     if raw and raw.height and raw.height > current_height:
         current_height = raw.height
         logger.info(f"live - upserting new height {raw.height=}")
-        await upsert_data(pool, raw, bucket, chain)
+        await upsert_data(manager, raw, bucket, chain)
     logger.info("live - upserting finished")
 
 
 async def get_data_live(
-    session: ClientSession, chain: CosmosChain, current_height: int
+    session: Manager, chain: CosmosChain, current_height: int
 ) -> Raw | None:
     """Get the latest block from the chain and process it.
 

@@ -7,7 +7,9 @@ from typing import Dict, List, Tuple, TypedDict
 from aiohttp import ClientOSError, ClientResponse, ClientSession
 import logging
 from aiohttp.client_exceptions import ClientError
+from aiohttp.client import _RequestContextManager
 from indexer.exceptions import APIResponseError
+from indexer.manager import Manager
 
 ChainApiResponse = Tuple[str | None, dict | None]
 LATEST = "latest"
@@ -119,14 +121,14 @@ class CosmosChain(metaclass=Singleton):
     async def _get(
         self,
         endpoint: str,
-        session: ClientSession,
+        manager: Manager,
         max_retries: int,
     ) -> ChainApiResponse:
         """Get data from an endpoint with retries
 
         Args:
             endpoint (str): endpoint to
-            session (aiohttp.ClientSession): _description_
+            session (Manager): _description_
             sem (asyncio.Semaphore): _description_
             max_retries (int): _description_
 
@@ -142,7 +144,7 @@ class CosmosChain(metaclass=Singleton):
             cur_api = self.get_next_api()
             start_time = time.time()
             try:
-                async with session.get(f"{cur_api}{endpoint}") as resp:
+                async with manager.get(f"{cur_api}{endpoint}") as resp:
                     r = await resp.read()
                     if await is_valid_response(r, resp):
                         end_time = time.time()
@@ -168,14 +170,14 @@ class CosmosChain(metaclass=Singleton):
 
     async def get_block(
         self,
-        session: ClientSession,
+        session: Manager,
         height: int | str = LATEST,
         max_retries=5,
     ) -> dict | None:
         """Get block data from an api
 
         Args:
-            session (aiohttp.ClientSession): ClientSession to use for the request
+            session (Manager): Manager to use for the request
             sem (asyncio.Semaphore): Semaphore to use for the request
             height (str, optional): height of the block to get. Defaults to "latest".
             max_retries (int, optional): max number of retries to make. Defaults to 5.
@@ -210,14 +212,14 @@ class CosmosChain(metaclass=Singleton):
 
     async def get_block_txs(
         self,
-        session: ClientSession,
+        session: Manager,
         height: int | str,
         max_retries=5,
     ) -> dict | None:
         """Get transactions from a block
 
         Args:
-            session (aiohttp.ClientSession): ClientSession to use for the request
+            session (Manager): Manager to use for the request
             sem (asyncio.Semaphore): Semaphore to use for the request
             height (str): height of the block to get transactions from
             max_retries (int, optional): max number of retries to make. Defaults to 5.
@@ -230,7 +232,7 @@ class CosmosChain(metaclass=Singleton):
         )
         return data
 
-    async def get_lowest_height(self, session: ClientSession):
+    async def get_lowest_height(self, session: Manager):
         async with session.get(
             f"{self.get_next_api()}{self.blocks_endpoint.format(1)}"
         ) as block_res:
@@ -254,7 +256,7 @@ async def get_chain_registry_info(
     """Pull Chain Info from Cosmos Chain Registry
 
     Args:
-        session (ClientSession): Aiohttp Session to query from
+        session (Manager): Manager to use for the request
         chain_registry_name (str): Name of chain in Cosmos Chain Registry
 
     Returns:
@@ -271,7 +273,7 @@ async def get_chain_info(session: ClientSession) -> Tuple[str, str, Apis]:
     """Get chain info from environment variables
 
     Args:
-        session (ClientSession): Aiohttp Session to query from
+        session (Manager): Aiohttp Session to query from
 
     Raises:
         EnvironmentError: If environment variables are not set
@@ -343,7 +345,7 @@ async def get_chain_from_environment(session: ClientSession) -> CosmosChain:
     I did not override __init__ due to potential other use cases for using the CosmosChain class to query chain data
 
     Args:
-        session (ClientSession): session to query external requests from
+        session (Manager): session to query external requests from
 
     Raises:
         EnvironmentError: Error if environment variables are not defined

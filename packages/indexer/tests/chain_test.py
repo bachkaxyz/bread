@@ -1,51 +1,25 @@
+import asyncio
 import json
 import os
 import re
-from aiohttp import ClientResponse, ClientSession
-import asyncio
+from unittest.mock import AsyncMock, MagicMock, Mock
+
 import pytest
+from aiohttp import ClientResponse, ClientSession
 from aioresponses import aioresponses
 from indexer.chain import (
+    Api,
     CosmosChain,
     get_chain_from_environment,
     is_valid_response,
     query_chain_registry,
     remove_bad_apis,
-    Api,
 )
-from unittest.mock import AsyncMock, MagicMock, Mock
-
-from pytest_mock import MockFixture, MockerFixture, mocker
-
-
-@pytest.fixture
-def emptyApi():
-    return Api({"hit": 0, "miss": 0, "times": []})
+from indexer.manager import Manager
+from pytest_mock import MockerFixture, MockFixture, mocker
 
 
-@pytest.fixture
-async def session():
-    async with ClientSession() as session:
-        yield session
-
-
-@pytest.fixture
-def mock_chain(emptyApi: Api):
-    apis = {
-        "https://mock_api.com/": emptyApi,
-        "https://mock_api2.com/": emptyApi,
-    }
-    chain = CosmosChain(
-        chain_id="mock_chain_id",
-        chain_registry_name="mock_chain_registry_name",
-        blocks_endpoint="cosmos/blocks/{}",
-        txs_endpoint="cosmos/txs/{}",
-        apis=apis,
-    )
-    return chain
-
-
-async def test_api_get(mock_chain: CosmosChain, session: ClientSession):
+async def test_api_get(chain: CosmosChain, manager: Manager):
     with aioresponses() as m:
         exp_res = {"block": {"mock_key": "mock_response"}}
         m.get(
@@ -54,13 +28,13 @@ async def test_api_get(mock_chain: CosmosChain, session: ClientSession):
             body=json.dumps(exp_res),
         )
 
-        result = await mock_chain.get_block_txs(session, "1")
+        result = await chain.get_block_txs(manager, "1")
         assert exp_res == result
 
 
 async def test_api_get_wrong_status(
-    mock_chain: CosmosChain,
-    session: ClientSession,
+    chain: CosmosChain,
+    manager: Manager,
 ):
     exp_res = {"block": {"mock_key": "mock_response"}}
     with aioresponses() as m:
@@ -70,10 +44,10 @@ async def test_api_get_wrong_status(
             body=json.dumps(exp_res),
         )
 
-    assert None == await mock_chain.get_block_txs(session, "1")
+    assert None == await chain.get_block_txs(manager, "1")
 
 
-async def test_api_get_invalid_keys(mock_chain: CosmosChain, session: ClientSession):
+async def test_api_get_invalid_keys(chain: CosmosChain, manager: Manager):
     exp_res = {"code": 500, "message": "mock_response", "details": "mock_details"}
     with aioresponses() as m:
         m.get(
@@ -82,10 +56,10 @@ async def test_api_get_invalid_keys(mock_chain: CosmosChain, session: ClientSess
             body=json.dumps(exp_res),
         )
 
-    assert None == await mock_chain.get_block(session)
+    assert None == await chain.get_block(manager)
 
 
-async def test_api_get_invalid_json(mock_chain: CosmosChain, session: ClientSession):
+async def test_api_get_invalid_json(chain: CosmosChain, manager: Manager):
     exp_res = "invalid_json"
 
     with aioresponses() as m:
@@ -95,12 +69,12 @@ async def test_api_get_invalid_json(mock_chain: CosmosChain, session: ClientSess
             body=json.dumps(exp_res),
         )
 
-    assert None == await mock_chain.get_block(session)
+    assert None == await chain.get_block(manager)
 
 
 async def test_block_get_wrong_chain(
-    mock_chain: CosmosChain,
-    session: ClientSession,
+    chain: CosmosChain,
+    manager: Manager,
 ):
     exp_res = {"block": {"header": {"height": 1, "chain_id": "wrong_chain_id"}}}
     with aioresponses() as m:
@@ -110,15 +84,15 @@ async def test_block_get_wrong_chain(
             body=json.dumps(exp_res),
         )
 
-    result = await mock_chain.get_block(session)
+    result = await chain.get_block(manager)
     assert None == result
 
 
 async def test_valid_block_valid_chain(
-    mock_chain: CosmosChain,
-    session: ClientSession,
+    chain: CosmosChain,
+    manager: Manager,
 ):
-    exp_res = {"block": {"header": {"height": 1, "chain_id": "mock_chain_id"}}}
+    exp_res = {"block": {"header": {"height": 1, "chain_id": "chain_id"}}}
     with aioresponses() as m:
         m.get(
             re.compile(".*"),
@@ -126,12 +100,10 @@ async def test_valid_block_valid_chain(
             body=json.dumps(exp_res),
         )
 
-        assert exp_res == await mock_chain.get_block(session)
+        assert exp_res == await chain.get_block(manager)
 
 
-async def test_get_lowest_height_on_api(
-    mock_chain: CosmosChain, session: ClientSession
-):
+async def test_get_lowest_height_on_api(chain: CosmosChain, manager: Manager):
     exp_res = {
         "code": 3,
         "message": "height 1 is not available, lowest height is 2: invalid request",
@@ -144,7 +116,7 @@ async def test_get_lowest_height_on_api(
             body=json.dumps(exp_res),
         )
 
-        assert 2 == await mock_chain.get_lowest_height(session)
+        assert 2 == await chain.get_lowest_height(manager)
 
 
 async def test_chain_environment_fail_no_chain_registry(
@@ -329,13 +301,17 @@ async def test_remove_bad_api_exception(emptyApi: Api, session: ClientSession):
             )
 
 
-async def is_error_response():
-    await is_valid_response(
+async def test_is_error_response():
+    assert False == await is_valid_response(
         r={"code": "test", "message": "test", "details": "test"}, resp=Mock(status=200)
     )
+    assert False == await is_valid_response({}, Mock(status=200))
 
 
-def get_next_api_only_one(mock_chain: CosmosChain):
+def test_get_next_api_only_one(chain: CosmosChain):
     api = "https://api.jackalprotocol.com"
-    mock_chain.apis = {api: Api(hit=0, miss=0, times=[])}
-    assert mock_chain.get_next_api() == api
+    chain.apis = {api: Api(hit=0, miss=0, times=[])}
+    chain.current_api_index = 0
+    assert len(chain.apis) == 1
+    assert len(chain.apis.values()) == 1
+    assert chain.get_next_api() == api

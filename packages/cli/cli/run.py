@@ -59,9 +59,9 @@ def indexer(
 def dagster(redeploy: bool = True, prod: bool = False):
     compose_files: List[ValidPath] = []
     if prod:
-        compose_files.append("packages/dagster/docker-compose.prod.yaml")
+        compose_files.append("packages/dags/docker-compose.prod.yaml")
     else:
-        compose_files.append("packages/dagster/docker-compose.local.yaml")
+        compose_files.append("packages/dags/docker-compose.local.yaml")
 
     env = root_env_vars()
     docker = DockerClient(
