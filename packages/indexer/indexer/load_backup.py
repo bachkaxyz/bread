@@ -39,20 +39,14 @@ async def main():
                         "prefix": f"{prefix}/block",
                     },
                 )
-                for blob_name in blobs["items"]:
-                    print(blob_name["name"])
-                    await parse_and_upsert(
-                        manager, storage, bucket, blob_name["name"], prefix
-                    )
-                # await asyncio.gather(
-                #     *[
-                #         upsert_data_to_db(manager, blob["name"])
-                #         for blob in blobs["items"]
-                #     ]
-                # )
-                break
+
+                await asyncio.gather(
+                    *[
+                        parse_and_upsert(manager, storage, bucket, blob["name"], prefix)
+                        for blob in blobs["items"]
+                    ]
+                )
                 next_page_token = blobs["nextPageToken"]
-                print(len(blobs["items"]))
 
 
 async def parse_and_upsert(
@@ -65,11 +59,13 @@ async def parse_and_upsert(
         height = raw.height
 
         # we will in theory only get here if there are txs
-        tx_data = await storage.download(bucket.name, f"{prefix}/txs/{height}.json")
-        txs = json.loads(tx_data)
+        try:
+            tx_data = await storage.download(bucket.name, f"{prefix}/txs/{height}.json")
+            txs = json.loads(tx_data)
+            raw.parse_tx_responses(txs)
+        except Exception as e:
+            print(f"error pulling tx for {height} with {raw.block_tx_count} txs", e)
 
-        raw.parse_tx_responses(txs)
-        print(raw.tx_responses_tx_count)
     else:
         raw.tx_responses_tx_count = 0
     return await upsert_data_to_db(manager, raw)
