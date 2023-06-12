@@ -1,6 +1,6 @@
 import os
 import subprocess
-from typing import List
+from typing import List, Optional
 from cli.utils import build_all_packages, remove_all_package_builds, root_env_vars
 import typer
 from python_on_whales.docker_client import DockerClient
@@ -16,6 +16,7 @@ def indexer(
     build_docker: bool = True,
     build_packages: bool = True,
     open_shell: bool = False,
+    command: Optional[str] = typer.Argument(None, help="Command to run in the shell"),
 ):
     compose_files: List[ValidPath] = ["packages/indexer/docker-compose.yaml"]
     env = root_env_vars()
@@ -50,7 +51,13 @@ def indexer(
                 )
             docker.compose.run("indexer", command=["bash"], tty=True, remove=True)
         else:
-            docker.compose.up(detach=True, build=build_docker)
+            args = {"detach": True}
+            if command:
+                args["command"] = command
+            if build_docker:
+                args["build"] = True
+
+            docker.compose.up(**args)
     except:
         raise typer.Exit(code=1)
 
