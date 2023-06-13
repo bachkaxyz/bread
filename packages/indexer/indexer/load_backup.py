@@ -4,29 +4,27 @@ from aiohttp import ClientSession
 from gcloud.aio.storage import Storage, Bucket
 from indexer.db import create_tables, drop_tables, upsert_data_to_db
 from indexer.manager import Manager
+from indexer.config import Config
 from parse import Raw
 import os
 
 
 async def main():
-    schema_name = os.getenv("INDEXER_SCHEMA", "public")
-    db_kwargs = dict(
-        host=os.getenv("POSTGRES_HOST"),
-        port=os.getenv("POSTGRES_PORT"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-        database=os.getenv("POSTGRES_DB"),
-        server_settings={"search_path": schema_name},
-        command_timeout=60,
-    )
-    session_kwargs = dict()
+    config = Config()
+    await config.configure()
 
-    prefix = "jackal/jackal-1"
-    async with Manager(db_kwargs=db_kwargs, session_kwargs=session_kwargs) as manager:
+    prefix = (
+        f"{config.chain.chain_registry_name.lower()}/{config.chain.chain_id.lower()}"
+    )
+    async with Manager(
+        db_kwargs=config.db_kwargs, session_kwargs=config.session_kwargs
+    ) as manager:
         async with ClientSession() as session:
             async with (await manager.getPool()).acquire() as conn:
-                await drop_tables(conn, schema_name)
-                await create_tables(conn, schema_name)
+                if config.DROP_TABLES_ON_STARTUP:
+                    await drop_tables(conn, config.schema_name)
+                if config.CREATE_TABLES_ON_STARTUP:
+                    await create_tables(conn, config.schema_name)
             storage = Storage(session=session)
             bucket = storage.get_bucket("sn-mono-indexer")
             next_page_token = ""

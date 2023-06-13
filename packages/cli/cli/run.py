@@ -16,7 +16,7 @@ def indexer(
     build_docker: bool = True,
     build_packages: bool = True,
     open_shell: bool = False,
-    command: Optional[str] = typer.Argument(None, help="Command to run in the shell"),
+    command: Optional[str] = typer.Option(None, help="Command to run in the shell"),
 ):
     compose_files: List[ValidPath] = ["packages/indexer/docker-compose.yaml"]
     env = root_env_vars()
@@ -51,13 +51,14 @@ def indexer(
                 )
             docker.compose.run("indexer", command=["bash"], tty=True, remove=True)
         else:
-            args = {"detach": True}
             if command:
-                args["command"] = command
-            if build_docker:
-                args["build"] = True
-
-            docker.compose.up(**args)
+                if build_docker:
+                    docker.compose.build(
+                        ["indexer"],
+                    )
+                docker.compose.run("indexer", command=["bash", "-c", command], tty=True)
+            else:
+                docker.compose.up(detach=True, build=build_docker)
     except:
         raise typer.Exit(code=1)
 
