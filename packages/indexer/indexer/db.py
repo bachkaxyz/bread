@@ -9,14 +9,24 @@ from aiohttp import ClientSession
 from asyncpg import Connection, Pool
 from indexer.chain import CosmosChain
 from indexer.exceptions import ChainDataIsNoneError
+from indexer.manager import Manager
 from parse import Raw
 import logging
 from gcloud.aio.storage import Bucket, Storage, Blob
 from aiofiles import open as aio_open, os as aio_os
+from indexer.config import Config
 
 # timing
 blob_upload_times = []
 upsert_times = []
+
+
+def setup_dirs(chain: CosmosChain):
+    os.makedirs(
+        f"{chain.chain_registry_name}/{chain.chain_id}/blocks",
+        exist_ok=True,
+    )
+    os.makedirs(f"{chain.chain_registry_name}/{chain.chain_id}/txs", exist_ok=True)
 
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
@@ -75,9 +85,9 @@ async def create_tables(conn: Connection, schema: str):
         await conn.execute(f.read().replace("$schema", schema))
 
 
-async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket, chain: CosmosChain):
+async def upsert_data(manager: Manager, raw: Raw, bucket: Bucket, chain: CosmosChain):
     # loop = asyncio.get_event_loop()
-    tasks: List[Coroutine[Any, Any, bool]] = [upsert_data_to_db(pool, raw)]
+    tasks: List[Coroutine[Any, Any, bool]] = [upsert_data_to_db(manager, raw)]
     if raw.height and raw.raw_block:
         blob_url = (
             f"{chain.chain_registry_name}/{raw.chain_id}/blocks/{raw.height}.json"
@@ -95,12 +105,12 @@ async def upsert_data(pool: Pool, raw: Raw, bucket: Bucket, chain: CosmosChain):
     return all(results)
 
 
-async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
+async def upsert_data_to_db(manager: Manager, raw: Raw) -> bool:
     global upsert_times
     """Upsert a blocks data into the database
 
     Args:
-        pool (Pool): The database connection pool
+        manager (Manager): The manager of our indexer
         raw (Raw): The raw data to upsert
 
     Returns:
@@ -110,7 +120,7 @@ async def upsert_data_to_db(pool: Pool, raw: Raw) -> bool:
     logger = logging.getLogger("indexer")
     # we check if the data is valid before upserting it
     if raw.height is not None and raw.chain_id is not None:
-        async with pool.acquire() as conn:
+        async with (await manager.getPool()).acquire() as conn:
             await insert_raw(conn, raw)
             await insert_block(conn, raw)
 
@@ -160,7 +170,7 @@ async def insert_json_into_gcs(
             finish_time = time.time()
             blob_upload_times.append(finish_time - start_time)
             return True
-        except Exception as e:
+        except Exception:
             logger = logging.getLogger("indexer")
             logger.error(
                 f"blob upload failed, retrying in 1 second {traceback.format_exc()}"
@@ -179,8 +189,6 @@ async def insert_block(conn: Connection, raw: Raw):
             """,
             *raw.block.get_db_params(),
         )
-    else:
-        raise ChainDataIsNoneError("Block does not exist")
 
 
 async def insert_many_txs(conn: Connection, raw: Raw):

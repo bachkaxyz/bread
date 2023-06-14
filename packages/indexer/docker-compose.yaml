@@ -10,7 +10,6 @@ services:
       - ./../../.env
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=./creds.json
-      - PYTHONASYNCIODEBUG=1
     volumes:
       - .:/indexer
       - $GOOGLE_APPLICATION_CREDENTIALS:/indexer/creds.json
