@@ -1,3 +1,4 @@
+import os
 import subprocess
 import typer
 from cli.utils import remove_all_package_builds, root_env_vars, build_all_packages

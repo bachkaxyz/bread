@@ -14,10 +14,19 @@ from parse import Raw
 import logging
 from gcloud.aio.storage import Bucket, Storage, Blob
 from aiofiles import open as aio_open, os as aio_os
+from indexer.config import Config
 
 # timing
 blob_upload_times = []
 upsert_times = []
+
+
+def setup_dirs(chain: CosmosChain):
+    os.makedirs(
+        f"{chain.chain_registry_name}/{chain.chain_id}/blocks",
+        exist_ok=True,
+    )
+    os.makedirs(f"{chain.chain_registry_name}/{chain.chain_id}/txs", exist_ok=True)
 
 
 async def missing_blocks_cursor(conn: Connection, chain: CosmosChain):
