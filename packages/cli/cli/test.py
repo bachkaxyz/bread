@@ -1,3 +1,4 @@
+import os
 import subprocess
 import typer
 from cli.utils import remove_all_package_builds, root_env_vars, build_all_packages
@@ -13,6 +14,12 @@ def indexer(
     if build_packages:
         remove_all_package_builds()
         build_all_packages()
+    env = root_env_vars()
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = (
+        env["GOOGLE_APPLICATION_CREDENTIALS"]
+        if env["GOOGLE_APPLICATION_CREDENTIALS"]
+        else ""
+    )
     docker = DockerClient(compose_files=["packages/indexer/docker-compose.tests.yaml"])
     docker.compose.down(remove_orphans=True)
     try:

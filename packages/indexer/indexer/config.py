@@ -19,6 +19,8 @@ class Config:
 
     chain: CosmosChain
 
+    ENVIRONMENT: str
+
     def __init__(self):
         self.DROP_TABLES_ON_STARTUP = (
             os.getenv("DROP_TABLES_ON_STARTUP", "False").upper() == "TRUE"
@@ -42,9 +44,8 @@ class Config:
 
         self.BUCKET_NAME = os.getenv("BUCKET_NAME", "sn-mono-indexer-dev")
 
+        self.ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
     async def configure(self):
         async with ClientSession() as session:
             self.chain = await get_chain_from_environment(session)
-
-    def __repr__(self):
-        return str(self.__dict__)

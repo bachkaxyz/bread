@@ -1,33 +1,39 @@
+import json
 import os
 from indexer.chain import CosmosChain
 from indexer.config import Config
+from deepdiff import DeepDiff
 
 
-async def test_config():
-    os.environ = dict(
-        GIT_BRANCH="jackal",
-        DROP_TABLES_ON_STARTUP="true",
-        CREATE_TABLES_ON_STARTUP="true",
-        USE_LOG_FILE="false",
-        CHAIN_REGISTRY_NAME="secretnetwork",
-        LOAD_CHAIN_REGISTRY_APIS="false",
-        CHAIN_ID="secret-4",
-        BLOCKS_ENDPOINT="/cosmos/base/tendermint/v1beta1/blocks/{}",
-        TXS_ENDPOINT="/cosmos/tx/v1beta1/txs?events=tx.height={}",
-        APIS="https://lcd.secret.express",
-        BATCH_SIZE="100",
-        STEP_SIZE="20",
-        TIME_BETWEEN_BLOCKS="1",
-        POSTGRES_HOST="postgres",
-        POSTGRES_PORT="5431",
-        POSTGRES_DB="postgres",
-        POSTGRES_USER="postgres",
+async def test_config(mocker):
+    mocker.patch(
+        "os.environ",
+        dict(
+            GIT_BRANCH="jackal",
+            DROP_TABLES_ON_STARTUP="true",
+            CREATE_TABLES_ON_STARTUP="true",
+            USE_LOG_FILE="false",
+            CHAIN_REGISTRY_NAME="secretnetwork",
+            LOAD_CHAIN_REGISTRY_APIS="false",
+            CHAIN_ID="secret-4",
+            BLOCKS_ENDPOINT="/cosmos/base/tendermint/v1beta1/blocks/{}",
+            TXS_ENDPOINT="/cosmos/tx/v1beta1/txs?events=tx.height={}",
+            APIS="https://lcd.secret.express",
+            BATCH_SIZE="100",
+            STEP_SIZE="20",
+            TIME_BETWEEN_BLOCKS="1",
+            POSTGRES_HOST="postgres",
+            POSTGRES_PORT="5431",
+            POSTGRES_DB="postgres",
+            POSTGRES_USER="postgres",
+        ),
     )
     config = Config()
 
     await config.configure()
 
-    assert str(config) == str(
+    assert {} == DeepDiff(
+        config.__dict__,
         {
             "DROP_TABLES_ON_STARTUP": True,
             "CREATE_TABLES_ON_STARTUP": True,
@@ -55,5 +61,8 @@ async def test_config():
                 batch_size=100,
                 step_size=20,
             ),
-        }
+            "ENVIRONMENT": "development",
+        },
     )
+
+    mocker.resetall()
