@@ -1,5 +1,6 @@
 import asyncio
 import json
+import traceback
 from aiohttp import ClientSession
 from gcloud.aio.storage import Storage, Bucket
 from indexer.db import create_tables, drop_tables, upsert_data_to_db
@@ -66,7 +67,15 @@ async def parse_and_upsert(
 
     else:
         raw.tx_responses_tx_count = 0
-    return await upsert_data_to_db(manager, raw)
+    try:
+        return await upsert_data_to_db(manager, raw)
+    except Exception as e:
+        print(
+            f"error upserting {height} with {raw.block_tx_count} txs",
+            e,
+            traceback.format_exc(),
+        )
+        return
 
 
 if __name__ == "__main__":
