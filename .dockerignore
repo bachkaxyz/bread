@@ -1,0 +1,8 @@
+.git
+.gitignore
+.vscode/
+**/*.DS_Store
+**/*__pycache__
+data/
+target/
+logs/
