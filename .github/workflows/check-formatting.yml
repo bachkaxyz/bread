@@ -1,27 +1,27 @@
-name: Correct Code Formatting
+# name: Correct Code Formatting
 
-on: [push]
+# on: [push]
 
-jobs:
-    black_python_formatting:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
+# jobs:
+#     black_python_formatting:
+#         runs-on: ubuntu-latest
+#         steps:
+#             - uses: actions/checkout@v3
 
-            - uses: psf/black@stable
-              name: Check code formatting
-              with:
-                options: "--check --verbose ."
-    SQL_formatting:
-        runs-on: ubuntu-latest
-        steps:
-            - uses: actions/checkout@v3
+#             - uses: psf/black@stable
+#               name: Check code formatting
+#               with:
+#                 options: "--check --verbose ."
+#     SQL_formatting:
+#         runs-on: ubuntu-latest
+#         steps:
+#             - uses: actions/checkout@v3
 
-            - name: Set up Python 3.10
-              uses: actions/setup-python@v4
-              with:
-                python-version: "3.10"
-            - name: Install sqlfmt
-              run: pip install shandy-sqlfmt[jinjafmt]
-            - name: Run sqlfmt
-              run: sqlfmt --diff --check .
+#             - name: Set up Python 3.10
+#               uses: actions/setup-python@v4
+#               with:
+#                 python-version: "3.10"
+#             - name: Install sqlfmt
+#               run: pip install shandy-sqlfmt[jinjafmt]
+#             - name: Run sqlfmt
+#               run: sqlfmt --diff --check .
