@@ -7,6 +7,7 @@
 data/
 target/
 logs/
+dbt_packages/
 
 **/__pycache__
 .DS_Store

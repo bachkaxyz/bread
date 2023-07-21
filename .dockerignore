@@ -6,3 +6,4 @@
 data/
 target/
 logs/
+dbt_packages/
