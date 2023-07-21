@@ -67,22 +67,24 @@ class DataParser:
         try:
             if os.path.getsize(f'{self.output_path}/parsed_files.json') > 0:  # checks if file is not empty
                 with open(f'{self.output_path}/parsed_files.json', 'rb') as file:
-                    parsed_files = set(orjson.loads(file.read()))
+                    parsed_files = orjson.loads(file.read())
+                    if not isinstance(parsed_files, dict):
+                        parsed_files = {'blocks': [], 'txs': []}
             else:
-                parsed_files = set()
+                parsed_files = {'blocks': [], 'txs': []}
         except FileNotFoundError:
-            parsed_files = set()
+            parsed_files = {'blocks': [], 'txs': []}
 
         return parsed_files
 
-    def update_parsed_files(self, new_files):
+    def update_parsed_files(self, new_files, data_type):
         parsed_files = self.get_parsed_files()
-        parsed_files.update(new_files)
+        parsed_files[data_type].extend(new_files)
 
         with open(f'{self.output_path}/parsed_files.json', 'w') as file:
-            file.write(orjson.dumps(list(parsed_files)).decode('utf-8'))
+            file.write(orjson.dumps(parsed_files).decode('utf-8'))
 
-    def load_new_json(self, directory: str) -> pd.DataFrame:
+    def load_new_json(self, directory: str, data_type: str) -> pd.DataFrame:
         parsed_files = self.get_parsed_files()
 
         json_files = glob.glob(f"{directory}/*.json")
@@ -93,8 +95,8 @@ class DataParser:
         df = pd.concat(dfs, ignore_index=True)
 
         if not df.empty:
-            new_files = {file.split('/')[-1] for file in json_files}
-            self.update_parsed_files(new_files)
+            new_files = [file.split('/')[-1] for file in json_files]
+            self.update_parsed_files(new_files, data_type)
 
         return df
 
@@ -181,11 +183,8 @@ class DataParser:
         # Ensure the output directory exists"""
         os.makedirs(self.output_path, exist_ok=True)
 
-        # Create a timestamp
-        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-
         # Create a new directory for the table
-        table_dir = os.path.join(self.output_path, f"{name}/{timestamp}")
+        table_dir = os.path.join(self.output_path, name)
         os.makedirs(table_dir, exist_ok=True)
 
         df.to_parquet(table_dir, engine='pyarrow', partition_cols=['year', 'month', 'day'], index=False)
@@ -197,11 +196,11 @@ class DataParser:
         This method loads the blocks and transactions data, parses them, and saves the parsed data as partitioned Parquet files.
         """
         #self.blocks_df = self.load_all_json(self.blocks_path)
-        self.blocks_df = self.load_new_json(self.blocks_path)
+        self.blocks_df = self.load_new_json(self.blocks_path, 'blocks')
         self.parse_blocks()
         self.save_as_partitioned_parquet(df=self.blocks_df, name='blocks')
 
-        self.txs_df = self.load_new_json(self.txs_path)
+        self.txs_df = self.load_new_json(self.txs_path, 'txs')
         self.parse_txs()
         self.parse_logs()
         self.parse_events_wide()
