@@ -1,0 +1,12 @@
+dagit
+dagster==1.2.2
+duckdb
+duckdbt
+dbt-duckdb
+numpy
+orjson
+pandas
+pyarrow
+pydantic==1.10.7
+python-dotenv
+requests
