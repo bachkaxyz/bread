@@ -1,0 +1,15 @@
+# Dockerfile for bread
+FROM python:3.11 AS base
+
+WORKDIR /app
+ENV PYTHONPATH=/app
+
+COPY requirements.txt /tmp/
+RUN python3 -m pip install --pre --no-cache-dir --find-links=/tmp/ -r /tmp/requirements.txt
+
+COPY . .
+
+RUN cd duckdbt && pip install . && cd ..
+
+ENTRYPOINT ["make", "server"]
+
