@@ -1,12 +1,11 @@
-dagit
-dagster==1.2.2
-duckdb
+aiohttp==3.8.5
+duckdb==0.8.1
 duckdbt
 dbt-duckdb
 numpy
 orjson
 pandas
+prefect
 pyarrow
 pydantic==1.10.7
-python-dotenv
 requests

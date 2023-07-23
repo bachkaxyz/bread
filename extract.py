@@ -5,6 +5,7 @@ from requests.exceptions import JSONDecodeError
 import math
 import os
 import orjson
+import glob
 
 import aiohttp
 import asyncio
@@ -29,6 +30,7 @@ class DataExtractor:
         self.api_url = api_url
         self.start_height = start_height
         self.end_height= end_height
+        self.end_init = end_height
         self.start_init = start_height
         self.per_page_init = per_page
         self.per_page = per_page
@@ -77,9 +79,10 @@ class DataExtractor:
                         self.per_page //= 2
                         remaing_pages_to_iterate = None # trying to update this in case the <= remaining_pages_to_iterate is fucked
                         if self.per_page < 1:
-                            with open(f"/app/data/{self.network}/{self.protocol}/errors/error_heights.txt", "a") as error_file:
+                            with open(f"./data/{self.network}/{self.protocol}/errors/error_heights.txt", "a") as error_file:
                                 error_file.write(str(self.start_height) + "\n")
                             print("Warning: per_page has reached zero, can't reduce further. Moving to next block.")
+                            return data
 
                         # Recalculate remaining pages with new per_page value
                         # remaining_pages_to_iterate = math.ceil(total_count / self.per_page)
@@ -182,7 +185,27 @@ class DataExtractor:
         with open(filename, 'wb') as f:
             f.write(orjson.dumps(data))
 
-    def backfill(self):
+    async def async_query_txs(self, blocks, session):
+        """
+        Asynchronously query transactions for a list of blocks.
+
+        Args:
+            blocks (list): The list of block heights to query.
+            session (aiohttp.ClientSession): The session to use for the request.
+
+        Returns:
+            list: A list of transactions from the queried blocks.
+        """
+        tasks = [self.query_rpc(
+            endpoint_format='{api_url}/tx_search?query="tx.height>={start} AND tx.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true',
+            data_key='txs',
+            session=session,
+            block=block
+        ) for block in blocks]
+        results = await asyncio.gather(*tasks)
+        return results
+
+    async def backfill(self):
         """
         Backfill the DataFrame with missing blocks and transactions.
 
@@ -201,8 +224,8 @@ class DataExtractor:
         # Check if all blocks are present
         if self.blocks_df.shape[0] < self.end_height - self.start_init:
             # If not, backfill missing blocks
-            print("Backfilling blocks...")
             missing_blocks = set(range(self.start_init, self.end_height)) - set(self.blocks_df['block'].map(lambda x: x['header']['height']))
+            print(f"Backfilling {len(missing_blocks)} blocks...")
             for block in missing_blocks:
                 self.start_height = block
                 self.end_height = block
@@ -219,10 +242,14 @@ class DataExtractor:
             missing_txs_blocks = {x for x,y in blocks_with_txs.items() if x not in txs_heights}
             print(f'missing txs from {len(missing_txs_blocks)} blocks.')
             self.backfilled_txs = []
-            for block in missing_txs_blocks:
-                self.start_height = int(block)
-                self.end_height = int(block) # the query is <=, not <, so don't do +1
-                self.query_txs(mode='backfill') # currently not done async
+            # for block in missing_txs_blocks:
+            #     self.start_height = int(block)
+            #     self.end_height = int(block) # the query is <=, not <, so don't do +1
+            #     self.query_txs(mode='backfill') # currently not done async, but since the URLs are built, you can query all of them async and then paginate as needed
+
+            async with aiohttp.ClientSession() as session:
+                print('backfilling async')
+                self.backfilled_txs = await self.async_query_txs(missing_txs_blocks, session)
 
             print(f'{len(self.backfilled_txs)} recovered, but may still be missing data. Look in errors subdirectory.')
 
@@ -235,25 +262,31 @@ class DataExtractor:
             backfilled_tx_df = pd.DataFrame(to_be_added)
 
             self.tx_df = pd.concat([self.tx_df, backfilled_tx_df]).reset_index(drop=True)
-            self.tx_df.to_json(f'/app/data/{self.network}/{self.protocol}/txs/10000000_10099999.json', orient='records')
+            self.tx_df.to_json(f'./data/{self.network}/{self.protocol}/txs/{self.start_init}_{self.end_init}.json', orient='records')
 
             print("Done backfilling transactions.")
 
-    def generate_urls(self, endpoint_format: str):
+    def generate_urls(self, endpoint_format: str, total_pages=None):
         """
         Generate the URLs for the RPC API.
 
         Args:
             endpoint_format (str): A format string for the API endpoint URL.
+            total_pages (int): The total number of pages.
 
         Returns:
             list: A list of URLs.
         """
 
-        remaining_pages_to_iterate = (self.end_height - self.start_height) // self.per_page + 1
-        urls = [endpoint_format.format(api_url=self.api_url, start=self.start_height, end=self.end_height, page=page, per_page=self.per_page)
-            for page in range(1, remaining_pages_to_iterate+1)]
+        if total_pages:
+            urls = [endpoint_format.format(api_url=self.api_url, start=self.start_height, end=self.end_height, page=page, per_page=self.per_page)
+                for page in range(1, total_pages+1)]
 
+        else:
+            remaining_pages_to_iterate = (self.end_height - self.start_height) // self.per_page + 1
+            urls = [endpoint_format.format(api_url=self.api_url, start=self.start_height, end=self.end_height, page=page, per_page=self.per_page)
+                for page in range(1, remaining_pages_to_iterate+1)]
+            
         return urls
 
     def extract(self):
@@ -370,10 +403,13 @@ class DataExtractor:
         start = time.time()
 
         block_urls = self.generate_urls(
-            endpoint_format='{api_url}/block_search?query="block.height>={start} AND block.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true',
+            endpoint_format='{api_url}/block_search?query="block.height>={start} AND block.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true'
         )
+
+        tx_total_count = int(requests.get(f'{self.api_url}/tx_search?query="tx.height>={self.start_init} AND tx.height<={self.end_init}"&page=1&per_page={self.per_page}&order_by="asc"&match_events=true').json()['result']['total_count'])
+        tx_total_pages = math.ceil(tx_total_count / self.per_page)
         tx_urls = self.generate_urls(
-            endpoint_format='{api_url}/tx_search?query="tx.height>={start} AND tx.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true',
+            endpoint_format='{api_url}/tx_search?query="tx.height>={start} AND tx.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true', total_pages=tx_total_pages
         )
 
         # Fetch the data for each URLsema
@@ -391,7 +427,7 @@ class DataExtractor:
         self.blocks_df = pd.DataFrame(self.blocks)
         self.tx_df = pd.DataFrame(self.txs)
         
-        self.backfill()
+        await self.backfill()
         print(f'backfilling complete in {time.time() - start} seconds.')
 
         # download
@@ -406,16 +442,37 @@ class DataExtractor:
 def get_min_height(api_url):
     r = requests.get(f'{api_url}/block?height=1')
     json = r.json()
-    min_block = json['error']['data'].split(' ')[-1]
+
+    if 'result' in json.keys():
+        return 1
+    
+    else:
+        min_block = int(json['error']['data'].split(' ')[-1])
     return min_block
 
 def get_max_height(api_url):
     r = requests.get(f'{api_url}/abci_info?')
     json = r.json()
-    max_block = json['result']['response']['last_block_height']
+    max_block = int(json['result']['response']['last_block_height'])
+
     return max_block
 
+def get_min_ingested_height(directory):
+    files = glob.glob(f"{directory}/*.json")
+    min_height = min(int(file.split('/')[-1].split('_')[0]) for file in files) if files else 0
+    return min_height
+
+def get_max_ingested_height(directory):
+    files = glob.glob(f"{directory}/*.json")
+    if files:
+        max_height = max(int(file.split('/')[-1].split('_')[1].split('.')[0]) for file in files)
+    else:
+        max_height = 0  # or some other appropriate value
+        
+    return max_height
+
+
 if __name__ == "__main__":
-    extractr = DataExtractor(api_url='rpc_url', start_height=10000000, per_page=50, end_height=10100000-1, per_page=100)
+    extractor = DataExtractor(api_url='rpc_url', start_height=10000000, per_page=50, end_height=10100000-1, protocol='rpc', network='akash', semaphore=3)
     # extractor.extract()
-    # asyncio.run(extractor.extract())
+    asyncio.run(extractor.extract())
