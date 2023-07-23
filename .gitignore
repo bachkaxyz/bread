@@ -4,6 +4,8 @@
 *.csv
 *.duckdb
 *.wal
+*.log
+*.pid
 data/
 target/
 logs/
