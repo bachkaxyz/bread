@@ -1,0 +1,22 @@
+config:
+  send_anonymous_usage_stats: False
+  use_colors: True
+bread:
+  target: dev
+  outputs:
+    bv:
+      type: bv_duckdb
+      host: 0.0.0.0
+      port: 5433
+      database: main
+      schema: analytics
+      delegate: dev
+      api_port: 3456
+    dev:
+      type: duckdb
+      threads: 8
+      path: bread.duckdb
+      remote:
+        host: 0.0.0.0
+        port: 5433
+        user: dev

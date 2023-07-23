@@ -1,0 +1,3 @@
+[submodule "duckdbt"]
+	path = duckdbt
+	url = https://github.com/jwills/duckdbt

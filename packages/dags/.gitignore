@@ -1,3 +1,0 @@
-dagster_home/*
-!/dagster_home/dagster.yaml
-creds.json

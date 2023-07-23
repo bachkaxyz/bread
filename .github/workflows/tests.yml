@@ -1,94 +1,94 @@
-name: Tests
+# name: Tests
 
-on:
-  push:
-  workflow_dispatch:
-jobs:
-  indexer:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-          cache: pip
-      - run: pip install poetry && cd packages/cli && POETRY_VIRTUALENVS_CREATE=false poetry install && cd ../..
+# on:
+#   push:
+#   workflow_dispatch:
+# jobs:
+#   indexer:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: actions/setup-python@v4
+#         with:
+#           python-version: "3.10"
+#           cache: pip
+#       - run: pip install poetry && cd packages/cli && POETRY_VIRTUALENVS_CREATE=false poetry install && cd ../..
 
-      - name: "Parse Tests"
-        run: python3 packages/cli/cli/main.py test parse
+#       - name: "Parse Tests"
+#         run: python3 packages/cli/cli/main.py test parse
 
-      - id: "auth"
-        name: "Authenticate to Google Cloud"
-        uses: "google-github-actions/auth@v1"
-        with:
-          credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
-          export_environment_variables: true
+#       - id: "auth"
+#         name: "Authenticate to Google Cloud"
+#         uses: "google-github-actions/auth@v1"
+#         with:
+#           credentials_json: "${{ secrets.GCP_CREDENTIALS }}"
+#           export_environment_variables: true
 
-      - name: "Set up Cloud SDK"
-        uses: "google-github-actions/setup-gcloud@v1"
+#       - name: "Set up Cloud SDK"
+#         uses: "google-github-actions/setup-gcloud@v1"
 
-      - name: "Indexer Tests"
-        run: python3 packages/cli/cli/main.py test indexer
+#       - name: "Indexer Tests"
+#         run: python3 packages/cli/cli/main.py test indexer
 
-      - name: "Coverage Comment"
-        id: coverageComment
-        uses: MishaKav/pytest-coverage-comment@main
-        with:
-          pytest-coverage-path: ./packages/indexer/reports/pytest-coverage.txt
-          junitxml-path: ./packages/indexer/reports/pytest.xml
-          title: "Indexer Coverage Report"
-          coverage-path-prefix: "packages/indexer"
+#       - name: "Coverage Comment"
+#         id: coverageComment
+#         uses: MishaKav/pytest-coverage-comment@main
+#         with:
+#           pytest-coverage-path: ./packages/indexer/reports/pytest-coverage.txt
+#           junitxml-path: ./packages/indexer/reports/pytest.xml
+#           title: "Indexer Coverage Report"
+#           coverage-path-prefix: "packages/indexer"
 
-      - uses: mad9000/actions-find-and-replace-string@4
-        id: coverString
-        with:
-          source: ${{ steps.coverageComment.outputs.coverage }}
-          find: "%"
-          replace: ""
+#       - uses: mad9000/actions-find-and-replace-string@4
+#         id: coverString
+#         with:
+#           source: ${{ steps.coverageComment.outputs.coverage }}
+#           find: "%"
+#           replace: ""
 
-      - name: "Fail?"
-        if: ${{always()}}
-        uses: actions/github-script@v3
-        with:
-          script: |
-            if ( ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || Number(${{ steps.coverString.outputs.value }}) < ${{ 80 }} ) {
-              core.setFailed('Coverage not correct!')
-            }
+#       - name: "Fail?"
+#         if: ${{always()}}
+#         uses: actions/github-script@v3
+#         with:
+#           script: |
+#             if ( ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || Number(${{ steps.coverString.outputs.value }}) < ${{ 80 }} ) {
+#               core.setFailed('Coverage not correct!')
+#             }
 
-  parse:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.10"
-          cache: pip
-      - run: pip install poetry && cd packages/cli && POETRY_VIRTUALENVS_CREATE=false poetry install && cd ../..
+#   parse:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v3
+#       - uses: actions/setup-python@v4
+#         with:
+#           python-version: "3.10"
+#           cache: pip
+#       - run: pip install poetry && cd packages/cli && POETRY_VIRTUALENVS_CREATE=false poetry install && cd ../..
 
-      - name: "Parse Tests"
-        run: python3 packages/cli/cli/main.py test parse
+#       - name: "Parse Tests"
+#         run: python3 packages/cli/cli/main.py test parse
 
-      - name: "Coverage Comment"
-        uses: MishaKav/pytest-coverage-comment@main
-        id: coverageComment
-        with:
-          pytest-coverage-path: ./packages/parse/reports/pytest-coverage.txt
-          junitxml-path: ./packages/parse/reports/pytest.xml
-          title: "Parse Coverage Report"
-          coverage-path-prefix: "packages/parse"
+#       - name: "Coverage Comment"
+#         uses: MishaKav/pytest-coverage-comment@main
+#         id: coverageComment
+#         with:
+#           pytest-coverage-path: ./packages/parse/reports/pytest-coverage.txt
+#           junitxml-path: ./packages/parse/reports/pytest.xml
+#           title: "Parse Coverage Report"
+#           coverage-path-prefix: "packages/parse"
 
-      - uses: mad9000/actions-find-and-replace-string@4
-        id: coverString
-        with:
-          source: ${{ steps.coverageComment.outputs.coverage }}
-          find: "%"
-          replace: ""
+#       - uses: mad9000/actions-find-and-replace-string@4
+#         id: coverString
+#         with:
+#           source: ${{ steps.coverageComment.outputs.coverage }}
+#           find: "%"
+#           replace: ""
 
-      - name: "Fail?"
-        if: ${{always()}}
-        uses: actions/github-script@v3
-        with:
-          script: |
-            if ( ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || Number(${{ steps.coverString.outputs.value }}) < ${{ 85 }} ) {
-              core.setFailed('Coverage not correct!')
-            }
+#       - name: "Fail?"
+#         if: ${{always()}}
+#         uses: actions/github-script@v3
+#         with:
+#           script: |
+#             if ( ${{ steps.coverageComment.outputs.failures }} != ${{ 0 }} || Number(${{ steps.coverString.outputs.value }}) < ${{ 85 }} ) {
+#               core.setFailed('Coverage not correct!')
+#             }

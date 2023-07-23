@@ -1,5 +1,13 @@
 .env
-creds.json
+*.json
+*.parquet
+*.csv
+*.duckdb
+*.wal
+data/
+target/
+logs/
+dbt_packages/
 
 **/__pycache__
 .DS_Store

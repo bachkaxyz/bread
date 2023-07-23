@@ -1,0 +1,1 @@
+SELECT * FROM '../data/{{ var('network') }}/parsed/log_attributes/year=*/month=*/day=*/*.parquet'

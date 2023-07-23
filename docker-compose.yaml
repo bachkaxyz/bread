@@ -1,26 +1,16 @@
 version: '3'
+
 services:
-  postgres:
-    image: postgres:14
-    container_name: ${COMPOSE_PREFIX}-postgres # suppose to mirror our prod workhorse setup essentially
+  bread:
+    build:
+      context: .
+      dockerfile: Dockerfile.bread
     ports:
-      - 5431:5431
-    expose:
-      - 5431
+      - "3000:3000"
+      - "3456:3456"
+      - "5433:5433"
+      - "8080:8080"
+    volumes:
+      - .:/app
     env_file:
       - .env
-    healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "postgres" ]
-      interval: 5s
-      timeout: 30s
-      retries: 50
-    restart: always
-    volumes:
-      - postgres-db-volume:/var/lib/postgresql/data
-    command: -p 5431 # runs postgres on a different port
-volumes:
-  postgres-db-volume:
-networks:
-  default:
-    name: sn-mono-network
-    driver: bridge
