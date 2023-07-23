@@ -64,6 +64,11 @@ class DataParser:
         return str(base64.b64decode(data), 'utf-8')
 
     def get_parsed_files(self):
+        # Check if the directory exists and create it if necessary
+        directory = os.path.dirname(f'{self.output_path}/parsed_files.json')
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+
         try:
             if os.path.getsize(f'{self.output_path}/parsed_files.json') > 0:  # checks if file is not empty
                 with open(f'{self.output_path}/parsed_files.json', 'rb') as file:
@@ -78,6 +83,11 @@ class DataParser:
         return parsed_files
 
     def update_parsed_files(self, new_files, data_type):
+         # Check if the directory exists and create it if necessary
+        directory = os.path.dirname(f'{self.output_path}/parsed_files.json')
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            
         parsed_files = self.get_parsed_files()
         parsed_files[data_type].extend(new_files)
 
