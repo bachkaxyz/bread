@@ -1,0 +1,44 @@
+
+version: 2
+
+sources:
+  - name: indexer
+    schema: "{{env_var('INDEXER_SCHEMA', 'public')}}"
+    tables:
+      - name: raw
+        description: "Raw Blockchain Data"
+        columns: 
+          - name: chain_id
+          - name: height
+          - name: block
+          - name: block_tx_count
+          - name: tx_responses
+          - name: tx_tx_count
+          - name: created_at
+      - name: txs
+        description: "Transactions"
+        columns: 
+          - name: txhash
+          - name: chain_id
+          - name: height
+          - name: code
+          - name: data
+          - name: info
+          - name: logs
+          - name: events
+          - name: raw_log
+          - name: gas_used
+          - name: gas_wanted
+          - name: codespace
+          - name: timestamp
+      - name: logs
+        description: "Logs"
+      - name: log_columns
+        description: "Log Columns"
+      - name: blocks
+        description: "Blocks"
+        columns:
+          - name: height
+          - name: chain_id
+          - name: block_hash
+          - name: proposer_address
