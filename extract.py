@@ -5,6 +5,7 @@ from requests.exceptions import JSONDecodeError
 import math
 import os
 import orjson
+import glob
 
 import aiohttp
 import asyncio
@@ -406,14 +407,29 @@ class DataExtractor:
 def get_min_height(api_url):
     r = requests.get(f'{api_url}/block?height=1')
     json = r.json()
-    min_block = json['error']['data'].split(' ')[-1]
+
+    if 'result' in json.keys():
+        return 1
+    
+    else:
+        min_block = json['error']['data'].split(' ')[-1]
     return min_block
 
 def get_max_height(api_url):
     r = requests.get(f'{api_url}/abci_info?')
     json = r.json()
-    max_block = json['result']['response']['last_block_height']
-    return max_block
+    max_block = json['result']['response']
+
+def get_min_ingested_height(directory):
+    files = glob.glob(f"{directory}/*.json")
+    min_height = min(int(file.split('/')[-1].split('_')[0]) for file in files)
+    return min_height
+
+def get_max_ingested_height(directory):
+    files = glob.glob(f"{directory}/*.json")
+    max_height = max(int(file.split('/')[-1].split('_')[1].split('.')[0]) for file in files)
+    return max_height
+
 
 if __name__ == "__main__":
     extractr = DataExtractor(api_url='rpc_url', start_height=10000000, per_page=50, end_height=10100000-1, per_page=100)
