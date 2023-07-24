@@ -13,7 +13,8 @@ BREAD is a data pipeline for blockchain data. Currently built for tendermint-bas
 ## Getting Started
 
 1. **Clone the Repository**: Clone this repository to your local machine.
-2. **Set up Environment Variables**: Set up the necessary environment variables in a `.env` file. This includes the network for the blockchain data.
-3. **Build and Run the Docker Container**: Use the provided Makefile command, `make up`, to build and run the Docker container.
-4. **Do Things**: run `make bash` to enter the container. You can also access a query interface at `http://localhost:8080/#`. 
-5. **Get Data or Run Pipeline**: `make pipeline` to pull, parse, and ingest data in duckdb.
+2. **Load Submodules** If the [duckdbt](duckdbt) folder is empty, cd into your local repository and run `git submodule update --init` to load the submodules.
+3. **Set up Environment Variables**: Set up the necessary environment variables in a `.env` file. This includes the network for the blockchain data.
+4. **Build and Run the Docker Container**: Use the provided Makefile command, `make up`, to build and run the Docker container.
+5. **Do Things**: run `make bash` to enter the container. You can also access a query interface at `http://localhost:8080/#`. 
+6. **Get Data or Run Pipeline**: `make pipeline` to pull, parse, and ingest data in duckdb.
