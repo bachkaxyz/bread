@@ -11,11 +11,4 @@ COPY . .
 
 RUN cd duckdbt && pip install . && cd ..
 
-# Install supervisor
-RUN apt-get update && apt-get install -y supervisor
-
-# Create supervisor configuration directory
-RUN mkdir -p /var/log/supervisor
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-ENTRYPOINT ["/usr/bin/supervisord"]
+ENTRYPOINT ["make", "server"]
