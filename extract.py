@@ -224,7 +224,9 @@ class DataExtractor:
         # Check if all blocks are present
         if self.blocks_df.shape[0] < self.end_height - self.start_init:
             # If not, backfill missing blocks
-            missing_blocks = set(range(self.start_init, self.end_height)) - set(self.blocks_df['block'].map(lambda x: x['header']['height']))
+            set_of_expected_blocks = set(range(self.start_init, self.end_height))
+            blocks_present =  set(self.blocks_df['block'].map(lambda x: x['header']['height']).astype(int))
+            missing_blocks = set_of_expected_blocks - blocks_present
             print(f"Backfilling {len(missing_blocks)} blocks...")
             for block in missing_blocks:
                 self.start_height = block
