@@ -39,7 +39,7 @@ class DataExtractor:
         self.network = network
         self.semaphore = semaphore
 
-    def query_rpc(self, endpoint_format: str, data_key: str):
+    def query_rpc(self, endpoint_format: str, data_key: str, start_height: int, end_height: int):
         """
         Query the blockchain API.
 
@@ -59,7 +59,7 @@ class DataExtractor:
         while remaining_pages_to_iterate is None or page <= remaining_pages_to_iterate:
             print(f'page {page} with {remaining_pages_to_iterate} remaining pages to iterate for data keys: {data_key} | total processed: {total_items_processed}')
             self.per_page = self.per_page_init  # reset per_page to its initial value at the beginning of each loop
-            endpoint = endpoint_format.format(api_url=self.api_url, start=self.start_height, end=self.end_height, page=page, per_page=self.per_page)
+            endpoint = endpoint_format.format(api_url=self.api_url, start=start_height, end=end_height, page=page, per_page=self.per_page)
             while True: # retry loop
                 try:
                     r = self.session.get(endpoint).json()
@@ -191,19 +191,37 @@ class DataExtractor:
 
         Args:
             blocks (list): The list of block heights to query.
-            session (aiohttp.ClientSession): The session to use for the request.
 
         Returns:
             list: A list of transactions from the queried blocks.
         """
+
         tasks = [self.query_rpc(
-            endpoint_format='{api_url}/tx_search?query="tx.height>={start} AND tx.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true',
+            endpoint_format='{api_url}/cosmos/tx/v1beta1/txs?events=tx.height>={start}&events=tx.height<={end}&pagination.offset={page}&pagination.limit={per_page}&pagination.count_total=true&order_by=ORDER_BY_ASC',
             data_key='txs',
-            session=session,
-            block=block
+            start_height=block,
+            end_height=block
         ) for block in blocks]
         results = await asyncio.gather(*tasks)
         return results
+    
+    async def async_query_blocks(self, blocks, session):
+        """
+        Asynchronously query blocks,
+
+        Args:
+            blocks (list): The list of block heights to query.
+
+        Returns:
+            list: A list of queried blocks.
+        """
+
+        tasks = [self.session.get(f'{self.api_url}/block?height={block}').json() for block in blocks]
+        results = await asyncio.gather(*tasks)
+        return results
+    
+    
+    
 
     async def backfill(self):
         """
@@ -222,17 +240,25 @@ class DataExtractor:
         total_txs_from_blocks = sum(blocks_and_txs.values())
         
         # Check if all blocks are present
-        if self.blocks_df.shape[0] < self.end_height - self.start_init:
+        if self.blocks_df.shape[0] < self.end_init - self.start_init:
             # If not, backfill missing blocks
-            set_of_expected_blocks = set(range(self.start_init, self.end_height))
+            set_of_expected_blocks = set(range(self.start_init, self.end_init))
             blocks_present =  set(self.blocks_df['block'].map(lambda x: x['header']['height']).astype(int))
             missing_blocks = set_of_expected_blocks - blocks_present
             print(f"Backfilling {len(missing_blocks)} blocks...")
-            for block in missing_blocks:
-                self.start_height = block
-                self.end_height = block
-                self.query_blocks()
+            async with aiohttp.ClientSession() as session:
+                print('backfilling blocks async')
+                self.backfilled_blocks = await self.async_query_blocks(missing_blocks, session)
             print("Done backfilling blocks.")
+
+            to_be_added = []
+            for data in self.backfilled_blocks:
+                for page in data:
+                    to_be_added.append(page)
+
+            backfilled_blocks_df = pd.DataFrame(to_be_added)
+            self.blocks_df = pd.concat([self.blocks_df, backfilled_blocks_df]).reset_index(drop=True)
+            print(f'{len(to_be_added)} blocks recovered out of {missing_blocks} total missing blocks')
 
         # Check if all transactions are present
         if num_txs_logged == total_txs_from_blocks:
@@ -244,22 +270,17 @@ class DataExtractor:
             missing_txs_blocks = {x for x,y in blocks_with_txs.items() if x not in txs_heights}
             print(f'missing txs from {len(missing_txs_blocks)} blocks.')
             self.backfilled_txs = []
-            # for block in missing_txs_blocks:
-            #     self.start_height = int(block)
-            #     self.end_height = int(block) # the query is <=, not <, so don't do +1
-            #     self.query_txs(mode='backfill') # currently not done async, but since the URLs are built, you can query all of them async and then paginate as needed
 
             async with aiohttp.ClientSession() as session:
-                print('backfilling async')
+                print('backfilling txs async')
                 self.backfilled_txs = await self.async_query_txs(missing_txs_blocks, session)
-
             print(f'{len(self.backfilled_txs)} recovered, but may still be missing data. Look in errors subdirectory.')
 
-            print(f'{len(to_be_added)} txs recovered out of {total_txs_from_blocks - num_txs_logged} total missing txs')
             to_be_added = []
             for data in self.backfilled_txs:
                 for page in data:
                     to_be_added.append(page)
+            print(f'{len(to_be_added)} txs recovered out of {total_txs_from_blocks - num_txs_logged} total missing txs')
 
             backfilled_tx_df = pd.DataFrame(to_be_added)
 
@@ -429,7 +450,7 @@ class DataExtractor:
         self.blocks_df = pd.DataFrame(self.blocks)
         self.tx_df = pd.DataFrame(self.txs)
         
-        await self.backfill()
+        #await self.backfill()
         print(f'backfilling complete in {time.time() - start} seconds.')
 
         # download
@@ -477,4 +498,11 @@ def get_max_ingested_height(directory):
 if __name__ == "__main__":
     extractor = DataExtractor(api_url='rpc_url', start_height=10000000, per_page=50, end_height=10100000-1, protocol='rpc', network='akash', semaphore=3)
     # extractor.extract()
-    asyncio.run(extractor.extract())
+    asyncio.run(extractor.async_extract())
+
+
+# from extract import DataExtractor
+# import asyncio
+# extractor = DataExtractor(api_url='http://131.153.175.178:26657', start_height=12043519, end_height=12053519, per_page=50, protocol='rpc',network='akash',semaphore=5)
+# import asyncio
+# asyncio.run(extractor.async_extract())
