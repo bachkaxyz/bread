@@ -29,7 +29,7 @@ build-no-cache:
 	docker build  --no-cache -t bread -f Dockerfile.bread .
 
 server:
-	cd dbt && python3 -m duckdbt.server
+	npm --prefix ./reports run dev & cd dbt && python3 -m duckdbt.server
 
 dbt-run:
 	cd dbt && dbt run && cd
