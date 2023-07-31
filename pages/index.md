@@ -1,4 +1,9 @@
-# Welcome to Evidence
+---
+title: bread 🍞
+hide_title: true
+---
+
+# Welcome to Evidence!
 
 Build polished data products with SQL and Markdown.
 

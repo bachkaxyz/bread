@@ -4,7 +4,7 @@
   "scripts": {
     "build": "evidence build",
     "build:strict": "evidence build:strict",
-    "dev": "evidence dev --host 0.0.0.0 --open /",
+    "dev": "evidence dev --host 0.0.0.0",
     "test": "evidence build"
   },
   "engines": {
@@ -19,6 +19,7 @@
   "overrides": {
     "jsonwebtoken": "9.0.0",
     "trim@<0.0.3": ">0.0.3",
-    "sqlite3": "5.1.5"
+    "sqlite3": "5.1.5",
+    "@steeze-ui/svelte-icon": "1.4.1"
   }
 }

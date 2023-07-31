@@ -18,4 +18,10 @@ dbt_packages/
 **/coverage.xml
 **/dist
 **/info
-!package.json
+
+!package*.json
+.svelte-kit
+build
+node_modules
+.DS_Store
+.evidence-queries
