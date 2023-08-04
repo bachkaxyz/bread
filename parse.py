@@ -220,6 +220,11 @@ class DataParser:
         self.df_log_attributes = self.df_log_attributes.merge(self.blocks_df[['height', 'time', 'day', 'month', 'year']], on=['height'])
         self.events_df_wide = self.events_df_wide.merge(self.blocks_df[['height', 'time', 'day', 'month', 'year']], on=['height'])
 
+        #self.df_tx_result['time'] = pd.to_datetime(self.df_tx_result['time'], utc=True, unit='ns')
+        #self.df_log_attributes['time'] = pd.to_datetime(self.df_log_attributes['time'], utc=True, unit='ns')
+        #self.events_df_wide['time'] = pd.to_datetime(self.events_df_wide['time'], utc=True, unit='ns')
+        #self.blocks_df['time'] = pd.to_datetime(self.blocks_df['time'], utc=True, unit='ns')
+
         # Save dataframes as partitioned parquet files
         self.save_as_partitioned_parquet(df=self.df_tx_result[['hash', 'height', 'time', 'day', 'month', 'year', 'gas_wanted', 'gas_used', 'code', 'codespace', 'info']], name='tx_result')
         self.save_as_partitioned_parquet(df=self.df_log_attributes, name='log_attributes')
