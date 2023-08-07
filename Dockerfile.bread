@@ -4,12 +4,12 @@ FROM nikolaik/python-nodejs:python3.11-nodejs20 as base
 WORKDIR /app
 ENV PYTHONPATH=/app
 
-COPY requirements.txt /tmp/
-RUN python3 -m pip install --pre --no-cache-dir --find-links=/tmp/ -r /tmp/requirements.txt
-
 COPY . .
 
 RUN cd duckdbt && pip install . && cd ..
+
+COPY requirements.txt /tmp/
+RUN python3 -m pip install --pre --no-cache-dir --find-links=/tmp/ -r /tmp/requirements.txt
 
 ENV NODE_VERSION=16.13.0
 RUN apt install -y curl
