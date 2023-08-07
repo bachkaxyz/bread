@@ -7,3 +7,7 @@ data/
 target/
 logs/
 dbt_packages/
+*.duckdb
+*.wal
+*.csv
+*.parquet
