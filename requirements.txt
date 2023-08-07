@@ -1,7 +1,7 @@
 aiohttp==3.8.5
 duckdb==0.8.1
 dbt-duckdb==1.5.2
-numpy==3.9.2
+numpy==1.25.1
 orjson==3.9.2
 pandas==2.0.3
 prefect==2.11.0
