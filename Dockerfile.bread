@@ -1,5 +1,5 @@
 # Dockerfile for bread
-FROM nikolaik/python-nodejs:python3.11-nodejs20 as base
+FROM nikolaik/python-nodejs:python3.11-nodejs20-bullseye as base
 
 WORKDIR /app
 ENV PYTHONPATH=/app
