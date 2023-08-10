@@ -22,7 +22,4 @@ ENV PATH="/root/.nvm/versions/node/v${NODE_VERSION}/bin/:${PATH}"
 RUN node --version
 RUN npm --version
 
-COPY package.json .
-RUN npm install
-
 ENTRYPOINT ["make", "server"]
