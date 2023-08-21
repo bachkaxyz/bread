@@ -6,9 +6,11 @@ import math
 import os
 import orjson
 import glob
-
 import aiohttp
 import asyncio
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 class DataExtractor:
     """
@@ -38,6 +40,10 @@ class DataExtractor:
         self.protocol = protocol
         self.network = network
         self.semaphore = semaphore
+
+        # Initializations for backfilling
+        self.backfilled_blocks = []
+        self.backfilled_txs = []
 
     def query_rpc(self, endpoint_format: str, data_key: str, start_height: int, end_height: int):
         """
@@ -219,9 +225,6 @@ class DataExtractor:
         tasks = [self.session.get(f'{self.api_url}/block?height={block}').json() for block in blocks]
         results = await asyncio.gather(*tasks)
         return results
-    
-    
-    
 
     async def backfill(self):
         """
@@ -316,18 +319,21 @@ class DataExtractor:
         """
         Run the extract process.
         """
-
+        logging.info(f"Starting extraction for block range {self.start_height} to {self.end_height}.")
         start = time.time()
+
+        # Extraction process
         self.query_blocks()
         self.query_txs()
+
+        # Backfill missing data
         self.backfill()
 
+        # Save extracted data
         self.save_json(self.blocks, 'blocks')
         self.save_json(self.tx, 'txs')
         end = time.time()
-        print(f"process took {end - start} seconds.")
-
-        print("Done.")
+        logging.info(f"Extraction completed in {end - start} seconds.")
 
     async def fetch(self, url: str, session):
         """
@@ -423,8 +429,10 @@ class DataExtractor:
         Run the extract process.
         """
 
+        logging.info(f"Starting async extraction for block range {self.start_height} to {self.end_height}.")
         start = time.time()
 
+        # Asynchronously get block and transaction URLs
         block_urls = self.generate_urls(
             endpoint_format='{api_url}/block_search?query="block.height>={start} AND block.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true'
         )
@@ -435,7 +443,7 @@ class DataExtractor:
             endpoint_format='{api_url}/tx_search?query="tx.height>={start} AND tx.height<={end}"&page={page}&per_page={per_page}&order_by="asc"&match_events=true', total_pages=tx_total_pages
         )
 
-        # Fetch the data for each URLsema
+        # Fetch the data 
         block_responses = await self.fetch_all(block_urls)
         print(f'block_responses complete in {time.time() - start} seconds.')
         tx_responses = await self.fetch_all(tx_urls)
@@ -458,10 +466,35 @@ class DataExtractor:
         self.save_json(self.txs, 'txs')
 
         end = time.time()
-        print(f"process took {end - start} seconds.")
+        logging.info(f"Async extraction completed in {end - start} seconds.")
 
         print("Done.")
 
+
+def write_metadata(directory, min_height, max_height):
+    metadata = {
+        'min_height': min_height,
+        'max_height': max_height
+    }
+    with open(f"{directory}/metadata.json", 'w') as f:
+        orjson.dump(metadata, f)
+
+def get_min_ingested_height(directory):
+    try:
+        with open(f"{directory}/metadata.json", 'r') as f:
+            metadata = orjson.loads(f)
+            return metadata['min_height']
+    except (FileNotFoundError, KeyError):
+        return 0
+
+def get_max_ingested_height(directory):
+    try:
+        with open(f"{directory}/metadata.json", 'r') as f:
+            metadata = orjson.loads(f)
+            return metadata['max_height']
+    except (FileNotFoundError, KeyError):
+        return 0
+    
 def get_min_height(api_url):
     r = requests.get(f'{api_url}/block?height=1')
     json = r.json()
@@ -480,12 +513,35 @@ def get_max_height(api_url):
 
     return max_block
 
-def get_min_ingested_height(directory):
+def validate_metadata(directory):
+    """
+    Validate the metadata by comparing it to actual file-based min and max heights.
+    Returns True if they match, False otherwise.
+    """
+    file_min = get_min_height_from_files(directory)
+    file_max = get_max_height_from_files(directory)
+
+    meta_min = get_min_ingested_height(directory)
+    meta_max = get_max_ingested_height(directory)
+
+    return file_min == meta_min and file_max == meta_max
+
+def update_metadata_from_files(directory):
+    """
+    Update the metadata based on actual file-based min and max heights.
+    """
+    file_min = get_min_height_from_files(directory)
+    file_max = get_max_height_from_files(directory)
+    
+    write_metadata(directory, file_min, file_max)
+
+# Rename your current methods for clarity
+def get_min_height_from_files(directory):
     files = glob.glob(f"{directory}/*.json")
     min_height = min(int(file.split('/')[-1].split('_')[0]) for file in files) if files else 0
     return min_height
 
-def get_max_ingested_height(directory):
+def get_max_height_from_files(directory):
     files = glob.glob(f"{directory}/*.json")
     if files:
         max_height = max(int(file.split('/')[-1].split('_')[1].split('.')[0]) for file in files)
@@ -497,12 +553,4 @@ def get_max_ingested_height(directory):
 
 if __name__ == "__main__":
     extractor = DataExtractor(api_url='rpc_url', start_height=10000000, per_page=50, end_height=10100000-1, protocol='rpc', network='akash', semaphore=3)
-    # extractor.extract()
     asyncio.run(extractor.async_extract())
-
-
-# from extract import DataExtractor
-# import asyncio
-# extractor = DataExtractor(api_url='http://131.153.175.178:26657', start_height=12043519, end_height=12053519, per_page=50, protocol='rpc',network='akash',semaphore=5)
-# import asyncio
-# asyncio.run(extractor.async_extract())
