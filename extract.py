@@ -483,7 +483,7 @@ def get_min_ingested_height(directory):
     try:
         with open(f"{directory}/metadata.json", 'r') as f:
             metadata = orjson.loads(f)
-            return int(metadata['min_height'])
+            return metadata['min_height']
     except (FileNotFoundError, KeyError):
         return 0
 
@@ -491,7 +491,7 @@ def get_max_ingested_height(directory):
     try:
         with open(f"{directory}/metadata.json", 'r') as f:
             metadata = orjson.loads(f)
-            return int(metadata['max_height'])
+            return metadata['max_height']
     except (FileNotFoundError, KeyError):
         return 0
     
