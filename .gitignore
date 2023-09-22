@@ -1,5 +1,5 @@
 .env
-*.json
+data/*.json
 *.parquet
 *.csv
 *.duckdb
@@ -19,7 +19,6 @@ dbt_packages/
 **/dist
 **/info
 
-!package*.json
 .svelte-kit
 build
 node_modules
