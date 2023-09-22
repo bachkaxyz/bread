@@ -1,0 +1,1 @@
+{"localGitRepo":"/app","gitRepo":"https://github.com/zachnorman02/bread.git","database":"postgres","credentials":{"host":"localhost","user":"postgres","password":"postgres","port":"5433","database":"postgres"}}

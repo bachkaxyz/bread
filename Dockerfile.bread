@@ -1,5 +1,5 @@
 # Dockerfile for bread
-FROM python:3.11 AS base
+FROM nikolaik/python-nodejs:python3.11-nodejs20-bullseye as base
 
 WORKDIR /app
 ENV PYTHONPATH=/app
@@ -10,5 +10,16 @@ RUN cd duckdbt && pip install . && cd ..
 
 COPY requirements.txt /tmp/
 RUN python3 -m pip install --pre --no-cache-dir --find-links=/tmp/ -r /tmp/requirements.txt
+
+ENV NODE_VERSION=16.13.0
+RUN apt install -y curl
+RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+ENV NVM_DIR=/root/.nvm
+RUN . "$NVM_DIR/nvm.sh" && nvm install ${NODE_VERSION}
+RUN . "$NVM_DIR/nvm.sh" && nvm use v${NODE_VERSION}
+RUN . "$NVM_DIR/nvm.sh" && nvm alias default v${NODE_VERSION}
+ENV PATH="/root/.nvm/versions/node/v${NODE_VERSION}/bin/:${PATH}"
+RUN node --version
+RUN npm --version
 
 ENTRYPOINT ["make", "server"]
