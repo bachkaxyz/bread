@@ -38,4 +38,7 @@ dbt-build:
 	cd dbt && dbt build && cd
 
 make pipeline:
-	python pipelines/pipeline.py
+	python pipelines/pipeline.py --pipeline=full
+
+make get-data:
+	python pipelines/pipeline.py --pipeline=pull
